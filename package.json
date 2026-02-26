@@ -28,10 +28,15 @@
       "import": "./dist/solana/index.js",
       "require": "./dist/solana/index.cjs"
     },
-    "./middleware": {
-      "types": "./dist/middleware/index.d.ts",
-      "import": "./dist/middleware/index.js",
-      "require": "./dist/middleware/index.cjs"
+    "./middleware/express": {
+      "types": "./dist/middleware/express.d.ts",
+      "import": "./dist/middleware/express.js",
+      "require": "./dist/middleware/express.cjs"
+    },
+    "./middleware/nextjs": {
+      "types": "./dist/middleware/nextjs.d.ts",
+      "import": "./dist/middleware/nextjs.js",
+      "require": "./dist/middleware/nextjs.cjs"
     },
     "./react": {
       "types": "./dist/react/index.d.ts",

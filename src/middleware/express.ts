@@ -5,7 +5,7 @@
  * No signing — server-side only validates incoming payment headers.
  *
  * Usage:
- *   import { x402Middleware } from '@stablecoin.xyz/x402/middleware'
+ *   import { x402Middleware } from '@stablecoin.xyz/x402/middleware/express'
  *   app.use('/premium', x402Middleware({ payTo: '0x...', amount: '1000000', network: 'base' }))
  */
 

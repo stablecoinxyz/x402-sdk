@@ -42,7 +42,7 @@ console.log(res.paymentResult) // { success, txHash, amountPaid, network }
 
 ```typescript
 import express from 'express'
-import { x402Middleware } from '@stablecoin.xyz/x402/middleware'
+import { x402Middleware } from '@stablecoin.xyz/x402/middleware/express'
 
 const app = express()
 
@@ -62,7 +62,7 @@ app.get(
 ### Server — gate a Next.js App Router route
 
 ```typescript
-import { withX402 } from '@stablecoin.xyz/x402/middleware'
+import { withX402 } from '@stablecoin.xyz/x402/middleware/nextjs'
 
 export const GET = withX402(
   {
@@ -104,7 +104,8 @@ function MyComponent() {
 | `@stablecoin.xyz/x402` | Core types, errors, network config |
 | `@stablecoin.xyz/x402/evm` | EVM client + signer adapters |
 | `@stablecoin.xyz/x402/solana` | Solana client + signer adapters |
-| `@stablecoin.xyz/x402/middleware` | Express + Next.js server middleware |
+| `@stablecoin.xyz/x402/middleware/express` | Express middleware |
+| `@stablecoin.xyz/x402/middleware/nextjs` | Next.js App Router middleware |
 | `@stablecoin.xyz/x402/react` | `useX402` React hook |
 
 ## Supported networks
