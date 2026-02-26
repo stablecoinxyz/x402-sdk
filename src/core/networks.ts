@@ -11,8 +11,8 @@ export const SUPPORTED_NETWORKS: Record<string, NetworkConfig> = {
     chainId: 8453,
     name: "Base",
     rpcUrl: "https://mainnet.base.org",
-    facilitatorUrl: "https://sbc-x402-facilitator.fly.dev",
-    facilitatorAddress: "0x124b082e8df36258198da4caa3b39c7dfa64d9ce",
+    facilitatorUrl: "https://x402.stablecoin.xyz",
+    facilitatorAddress: "0xdeE710bB6a3b652C35B5cB74E7bdb03EE1F641E6",
     defaultAsset: "0xfdcC3dd6671eaB0709A4C0f3F53De9a333d80798", // SBC on Base (18 decimals)
     explorerUrl: "https://basescan.org",
     decimals: 18,
@@ -22,8 +22,8 @@ export const SUPPORTED_NETWORKS: Record<string, NetworkConfig> = {
     chainId: 84532,
     name: "Base Sepolia",
     rpcUrl: "https://sepolia.base.org",
-    facilitatorUrl: "https://sbc-x402-facilitator.fly.dev",
-    facilitatorAddress: "0x124b082e8df36258198da4caa3b39c7dfa64d9ce",
+    facilitatorUrl: "https://x402.stablecoin.xyz",
+    facilitatorAddress: "0xdeE710bB6a3b652C35B5cB74E7bdb03EE1F641E6",
     defaultAsset: "0xf9FB20B8E097904f0aB7d12e9DbeE88f2dcd0F16", // SBC on Base Sepolia (6 decimals)
     explorerUrl: "https://sepolia.basescan.org",
     decimals: 6,
@@ -33,8 +33,8 @@ export const SUPPORTED_NETWORKS: Record<string, NetworkConfig> = {
     chainId: 723,
     name: "Radius",
     rpcUrl: "", // Must be provided via client options
-    facilitatorUrl: "https://sbc-x402-facilitator.fly.dev",
-    facilitatorAddress: "0x124b082e8df36258198da4caa3b39c7dfa64d9ce",
+    facilitatorUrl: "https://x402.stablecoin.xyz",
+    facilitatorAddress: "0xdeE710bB6a3b652C35B5cB74E7bdb03EE1F641E6",
     defaultAsset: "", // Must be provided via client options
     explorerUrl: "",
     decimals: 6,
@@ -44,8 +44,8 @@ export const SUPPORTED_NETWORKS: Record<string, NetworkConfig> = {
     chainId: 72344,
     name: "Radius Testnet",
     rpcUrl: "", // Must be provided via client options
-    facilitatorUrl: "https://sbc-x402-facilitator.fly.dev",
-    facilitatorAddress: "0x124b082e8df36258198da4caa3b39c7dfa64d9ce",
+    facilitatorUrl: "https://x402.stablecoin.xyz",
+    facilitatorAddress: "0xdeE710bB6a3b652C35B5cB74E7bdb03EE1F641E6",
     defaultAsset: "", // Must be provided via client options
     explorerUrl: "",
     decimals: 6,
@@ -55,8 +55,8 @@ export const SUPPORTED_NETWORKS: Record<string, NetworkConfig> = {
     chainId: 0, // Not applicable for Solana
     name: "Solana",
     rpcUrl: "https://api.mainnet-beta.solana.com",
-    facilitatorUrl: "https://sbc-x402-facilitator.fly.dev",
-    facilitatorAddress: "", // Not applicable for Solana
+    facilitatorUrl: "https://x402.stablecoin.xyz",
+    facilitatorAddress: "2mSjKVjzRGXcipq3DdJCijbepugfNSJCN1yVN2tgdw5K",
     defaultAsset: "", // Set via client options
     explorerUrl: "https://explorer.solana.com",
     decimals: 9,
@@ -66,8 +66,8 @@ export const SUPPORTED_NETWORKS: Record<string, NetworkConfig> = {
     chainId: 0,
     name: "Solana Devnet",
     rpcUrl: "https://api.devnet.solana.com",
-    facilitatorUrl: "https://sbc-x402-facilitator.fly.dev",
-    facilitatorAddress: "",
+    facilitatorUrl: "https://x402.stablecoin.xyz",
+    facilitatorAddress: "2mSjKVjzRGXcipq3DdJCijbepugfNSJCN1yVN2tgdw5K",
     defaultAsset: "",
     explorerUrl: "https://explorer.solana.com?cluster=devnet",
     decimals: 9,

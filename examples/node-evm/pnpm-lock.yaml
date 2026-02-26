@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@stablecoin.xyz/x402':
+        specifier: file:../..
+        version: file:../..(viem@2.46.3(typescript@5.9.3))
       viem:
         specifier: ^2.21.0
         version: 2.46.3(typescript@5.9.3)
@@ -201,6 +204,32 @@ packages:
   '@scure/bip39@1.6.0':
     resolution: {integrity: sha512-+lF0BbLiJNwVlev4eKelw1WWLaiKXw7sSl8T6FvBlWkdX+94aGJ4o8XjUdlyhTCjd8c+B3KT3JfS8P0bLRNU6A==}
 
+  '@stablecoin.xyz/x402@file:../..':
+    resolution: {directory: ../.., type: directory}
+    peerDependencies:
+      '@solana/spl-token': '>=0.3.0'
+      '@solana/web3.js': '>=1.0.0'
+      ethers: '>=6.0.0'
+      express: '>=4.0.0'
+      next: '>=13.0.0'
+      react: '>=18.0.0'
+      viem: '>=2.0.0'
+    peerDependenciesMeta:
+      '@solana/spl-token':
+        optional: true
+      '@solana/web3.js':
+        optional: true
+      ethers:
+        optional: true
+      express:
+        optional: true
+      next:
+        optional: true
+      react:
+        optional: true
+      viem:
+        optional: true
+
   abitype@1.2.3:
     resolution: {integrity: sha512-Ofer5QUnuUdTFsBRwARMoWKOH1ND5ehwYhJ3OJ/BQO+StkwQjHw0XyVh4vDttzHB7QOFhPHa/o413PJ82gU/Tg==}
     peerDependencies:
@@ -211,6 +240,12 @@ packages:
         optional: true
       zod:
         optional: true
+
+  base-x@5.0.1:
+    resolution: {integrity: sha512-M7uio8Zt++eg3jPj+rHMfCC+IuygQHHCOU+IYsVtik6FWjuYpVt/+MRKcgsAMHh8mMFAwnB+Bs+mTrFiXjMzKg==}
+
+  bs58@6.0.0:
+    resolution: {integrity: sha512-PD0wEnEYg6ijszw/u8s+iI3H17cTymlrwkKhDhPZq+Sokl3AU4htyBFTjAeNAlCCmg0f53g6ih3jATyCKftTfw==}
 
   esbuild@0.27.3:
     resolution: {integrity: sha512-8VwMnyGCONIs6cWue2IdpHxHnAjzxnw2Zr7MkVxB2vjmQ2ivqGFb4LEG3SMnv0Gb2F/G/2yA8zUaiL1gywDCCg==}
@@ -248,6 +283,9 @@ packages:
     resolution: {integrity: sha512-5C1sg4USs1lfG0GFb2RLXsdpXqBSEhAaA/0kPL01wxzpMqLILNxIxIOKiILz+cdg/pLnOUxFYOR5yhHU666wbw==}
     engines: {node: '>=18.0.0'}
     hasBin: true
+
+  tweetnacl@1.0.3:
+    resolution: {integrity: sha512-6rt+RN7aOi1nGMyC4Xa5DdYiukl2UWCbcJft7YhxReBGQD7OAM8Pbxw6YMo4r2diNEA8FEmu32YOn9rhaiE5yw==}
 
   typescript@5.9.3:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
@@ -377,9 +415,22 @@ snapshots:
       '@noble/hashes': 1.8.0
       '@scure/base': 1.2.6
 
+  '@stablecoin.xyz/x402@file:../..(viem@2.46.3(typescript@5.9.3))':
+    dependencies:
+      bs58: 6.0.0
+      tweetnacl: 1.0.3
+    optionalDependencies:
+      viem: 2.46.3(typescript@5.9.3)
+
   abitype@1.2.3(typescript@5.9.3):
     optionalDependencies:
       typescript: 5.9.3
+
+  base-x@5.0.1: {}
+
+  bs58@6.0.0:
+    dependencies:
+      base-x: 5.0.1
 
   esbuild@0.27.3:
     optionalDependencies:
@@ -446,6 +497,8 @@ snapshots:
       get-tsconfig: 4.13.6
     optionalDependencies:
       fsevents: 2.3.3
+
+  tweetnacl@1.0.3: {}
 
   typescript@5.9.3: {}
 
