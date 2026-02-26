@@ -2,7 +2,7 @@
  * withX402 — Next.js App Router wrapper for x402-gated route handlers.
  *
  * Usage:
- *   import { withX402 } from '@stablecoin.xyz/x402/middleware'
+ *   import { withX402 } from '@stablecoin.xyz/x402/middleware/nextjs'
  *   export const GET = withX402({ payTo: '0x...', amount: '1000000', network: 'base' }, async (req) => {
  *     return Response.json({ data: 'premium content' })
  *   })

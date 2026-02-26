@@ -8,7 +8,7 @@
  */
 
 import express from "express";
-import { x402Middleware } from "@stablecoin.xyz/x402/middleware";
+import { x402Middleware } from "@stablecoin.xyz/x402/middleware/express";
 
 const PAY_TO = process.env.PAY_TO || "0xbb46c0c1792d7b606db07cead656efd93b433222";
 const AMOUNT = process.env.AMOUNT || "1000000000000000"; // 0.001 SBC (18 decimals)
