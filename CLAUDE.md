@@ -59,8 +59,8 @@ pnpm dev            # Watch mode
 
 | Key | Chain | Facilitator |
 |-----|-------|-------------|
-| `base` | Base mainnet (8453) | https://x402.stablecoin.xyz |
-| `base-sepolia` | Base Sepolia (84532) | https://x402-testnet.stablecoin.xyz |
+| `base` | Base mainnet (8453) | https://x402.stablecoin.xyz (`0xdeE710bB6a3b652C35B5cB74E7bdb03EE1F641E6`) |
+| `base-sepolia` | Base Sepolia (84532) | https://x402.stablecoin.xyz |
 | `radius` | Radius (723) | https://x402.stablecoin.xyz |
 | `radius-testnet` | Radius testnet (72344) | https://x402-testnet.stablecoin.xyz |
 | `solana` | Solana mainnet | https://x402.stablecoin.xyz |

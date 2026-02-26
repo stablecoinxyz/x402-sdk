@@ -184,7 +184,23 @@ Payment flows directly payer → merchant. The facilitator never holds funds.
 
 ## Examples
 
-See [`examples/`](./examples/) for runnable Node.js + Express examples.
+### Express server
+
+```bash
+cd examples/express-server
+cp .env.example .env   # set PAY_TO, NETWORK, PORT
+pnpm install
+pnpm start
+```
+
+### Node.js EVM client
+
+```bash
+cd examples/node-evm
+cp .env.example .env   # set PRIVATE_KEY
+pnpm install
+pnpm start [target-url]   # default: http://localhost:4402/premium
+```
 
 ## License
 
