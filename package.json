@@ -3,6 +3,13 @@
   "version": "0.1.0",
   "description": "x402 HTTP payment protocol SDK — pay for APIs and gate your own with SBC stablecoin",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stablecoinxyz/x402-sdk.git"
+  },
+  "homepage": "https://github.com/stablecoinxyz/x402-sdk#readme",
+  "bugs": "https://github.com/stablecoinxyz/x402-sdk/issues",
+  "keywords": ["x402", "payments", "stablecoin", "sbc", "base", "solana", "evm", "http-payments"],
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -40,6 +47,7 @@
     "src"
   ],
   "scripts": {
+    "prepublishOnly": "pnpm build && pnpm test",
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
