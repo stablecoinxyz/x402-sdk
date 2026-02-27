@@ -193,11 +193,20 @@ pnpm install
 pnpm start
 ```
 
-### Node.js EVM client
+### EVM client
 
 ```bash
-cd examples/node-evm
+cd examples/evm-demo
 cp .env.example .env   # set PRIVATE_KEY
+pnpm install
+pnpm start [target-url]   # default: http://localhost:4402/premium
+```
+
+### Solana client
+
+```bash
+cd examples/solana-demo
+cp .env.example .env   # set PRIVATE_KEY (base58 Solana keypair)
 pnpm install
 pnpm start [target-url]   # default: http://localhost:4402/premium
 ```

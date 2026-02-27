@@ -1,0 +1,17 @@
+{
+  "name": "x402-solana-demo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx --env-file=.env client.ts"
+  },
+  "dependencies": {
+    "@stablecoin.xyz/x402": "file:../..",
+    "bs58": "^6.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}
