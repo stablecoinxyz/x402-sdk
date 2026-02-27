@@ -23,6 +23,7 @@ export default defineConfig({
     "express",
     "next",
     "ethers",
+    "crypto",
   ],
-  noExternal: ["tweetnacl", "bs58"],
+  platform: "node",
 });

@@ -12,7 +12,7 @@ const REQUIREMENT: PaymentRequirement = {
   payTo: "0x1234567890123456789012345678901234567890",
   asset: "0xf9FB20B8E097904f0aB7d12e9DbeE88f2dcd0F16",
   maxTimeoutSeconds: 300,
-  facilitator: "0x124b082e8df36258198da4caa3b39c7dfa64d9ce",
+  facilitator: "0xdeE710bB6a3b652C35B5cB74E7bdb03EE1F641E6",
   extra: { name: "SBC" },
 };
 
@@ -25,8 +25,8 @@ describe("FacilitatorClient.getFacilitatorUrl", () => {
 
   it("uses network-specific default when no override", () => {
     const client = new FacilitatorClient();
-    expect(client.getFacilitatorUrl("base")).toBe("https://sbc-x402-facilitator.fly.dev");
-    expect(client.getFacilitatorUrl("base-sepolia")).toBe("https://sbc-x402-facilitator.fly.dev");
+    expect(client.getFacilitatorUrl("base")).toBe("https://x402.stablecoin.xyz");
+    expect(client.getFacilitatorUrl("base-sepolia")).toBe("https://x402.stablecoin.xyz");
   });
 
   it("normalizes localhost to 127.0.0.1", () => {
@@ -144,7 +144,7 @@ describe("FacilitatorClient.verify", () => {
     await client.verify(payload, REQUIREMENT);
 
     const [url] = fetchFn.mock.calls[0];
-    expect(url).toMatch("sbc-x402-facilitator.fly.dev");
+    expect(url).toMatch("x402.stablecoin.xyz");
   });
 });
 
