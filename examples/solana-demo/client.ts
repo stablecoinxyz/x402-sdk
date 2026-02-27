@@ -20,6 +20,7 @@ if (!PRIVATE_KEY) {
 }
 
 const TARGET_URL = process.argv[2] || "http://localhost:4402/premium";
+const API_KEY = process.env.API_KEY; // required for Solana mainnet — get at dashboard.stablecoin.xyz
 
 // Decode base58 private key (64-byte keypair or 32-byte seed)
 const secretKey = bs58.decode(PRIVATE_KEY);
@@ -32,6 +33,7 @@ console.log();
 const client = createSolanaX402Client({
   signer,
   network: "solana",
+  apiKey: API_KEY,
 });
 
 // Free endpoint
