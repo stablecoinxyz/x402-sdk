@@ -16,6 +16,8 @@ export interface FacilitatorClientOptions {
   fetchFn?: typeof fetch;
   /** Request timeout in ms. Defaults to 30000. */
   timeoutMs?: number;
+  /** API key for mainnet access. Required for Base, Radius, and Solana mainnet. Get yours at dashboard.stablecoin.xyz */
+  apiKey?: string;
 }
 
 export class FacilitatorClient {
@@ -24,10 +26,13 @@ export class FacilitatorClient {
   private readonly timeoutMs: number;
   private readonly signerCache = new Map<string, string | undefined>();
 
+  private readonly apiKey: string | undefined;
+
   constructor(options: FacilitatorClientOptions = {}) {
     this.overrideUrl = options.facilitatorUrl;
     this.fetchFn = options.fetchFn ?? (globalThis.fetch as typeof fetch);
     this.timeoutMs = options.timeoutMs ?? 30_000;
+    this.apiKey = options.apiKey;
   }
 
   /** Get the facilitator URL for a given network (accepts CAIP-2 or friendly name), respecting override. */
@@ -50,7 +55,10 @@ export class FacilitatorClient {
 
         const response = await this.fetchWithTimeout(url, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(this.apiKey ? { "X-API-Key": this.apiKey } : {}),
+          },
           body: JSON.stringify({
             paymentPayload,
             paymentRequirements: {
@@ -87,7 +95,10 @@ export class FacilitatorClient {
 
         const response = await this.fetchWithTimeout(url, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(this.apiKey ? { "X-API-Key": this.apiKey } : {}),
+          },
           body: JSON.stringify({
             paymentPayload,
             paymentRequirements: {

@@ -35,6 +35,8 @@ export interface X402MiddlewareOptions {
   description?: string;
   /** Override facilitator URL. Defaults to network config. */
   facilitatorUrl?: string;
+  /** API key for mainnet access. Required for Base, Radius, and Solana mainnet. Get yours at dashboard.stablecoin.xyz */
+  apiKey?: string;
   /** Settle payment on-chain (default: true). Set false to only verify. */
   settle?: boolean;
   /** Custom fetch implementation (for testing). */
@@ -72,7 +74,7 @@ export function x402Middleware(opts: X402MiddlewareOptions | X402MiddlewareOptio
     return {
       opt: { ...opt, settle: opt.settle !== false },
       asset: opt.asset ?? networkConfig.defaultAsset,
-      facilitator: new FacilitatorClient({ facilitatorUrl: opt.facilitatorUrl, fetchFn: opt.fetchFn }),
+      facilitator: new FacilitatorClient({ facilitatorUrl: opt.facilitatorUrl, fetchFn: opt.fetchFn, apiKey: opt.apiKey }),
     };
   });
 
