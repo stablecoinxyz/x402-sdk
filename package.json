@@ -9,7 +9,16 @@
   },
   "homepage": "https://github.com/stablecoinxyz/x402-sdk#readme",
   "bugs": "https://github.com/stablecoinxyz/x402-sdk/issues",
-  "keywords": ["x402", "payments", "stablecoin", "sbc", "base", "solana", "evm", "http-payments"],
+  "keywords": [
+    "x402",
+    "payments",
+    "stablecoin",
+    "sbc",
+    "base",
+    "solana",
+    "evm",
+    "http-payments"
+  ],
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -57,7 +66,10 @@
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "pnpm build && pnpm test && changeset publish"
   },
   "dependencies": {
     "bs58": "^6.0.0",
@@ -73,15 +85,30 @@
     "viem": ">=2.0.0"
   },
   "peerDependenciesMeta": {
-    "@solana/spl-token": { "optional": true },
-    "@solana/web3.js": { "optional": true },
-    "ethers": { "optional": true },
-    "express": { "optional": true },
-    "next": { "optional": true },
-    "react": { "optional": true },
-    "viem": { "optional": true }
+    "@solana/spl-token": {
+      "optional": true
+    },
+    "@solana/web3.js": {
+      "optional": true
+    },
+    "ethers": {
+      "optional": true
+    },
+    "express": {
+      "optional": true
+    },
+    "next": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "viem": {
+      "optional": true
+    }
   },
   "devDependencies": {
+    "@changesets/cli": "^2.29.8",
     "@types/node": "^20.0.0",
     "@types/react": "^18.0.0",
     "tsup": "^8.0.0",
