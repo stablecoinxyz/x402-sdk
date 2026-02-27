@@ -262,6 +262,56 @@ describe("x402Middleware — settle failure", () => {
   });
 });
 
+describe("x402Middleware — multi-network (array input)", () => {
+  const EVM_PAY_TO = "0xaaaa000000000000000000000000000000000000";
+  const SOL_PAY_TO = "2mSjKVjzRGXcipq3DdJCijbepugfNSJCN1yVN2tgdw5K";
+
+  it("returns 402 with multiple accepts entries when no payment header", async () => {
+    const middleware = x402Middleware([
+      { payTo: EVM_PAY_TO, amount: "1000000", network: "base-sepolia" },
+      { payTo: SOL_PAY_TO, amount: "1000000", network: "solana-devnet" },
+    ]);
+    const res = makeRes();
+    await middleware(makeReq(), res, makeNext());
+
+    expect(res._status()).toBe(402);
+    const decoded = JSON.parse(fromBase64(res._headers()["PAYMENT-REQUIRED"]));
+    expect(decoded.accepts).toHaveLength(2);
+    expect(decoded.accepts[0].network).toBe("base-sepolia");
+    expect(decoded.accepts[1].network).toBe("solana-devnet");
+  });
+
+  it("routes EVM payment to EVM facilitator", async () => {
+    const evmFetch = makeMockFetch({ isValid: true }, { success: true, txHash: "0xevm" });
+    const middleware = x402Middleware([
+      { payTo: EVM_PAY_TO, amount: "1000000", network: "base-sepolia", facilitatorUrl: "https://evm.test", fetchFn: evmFetch },
+      { payTo: SOL_PAY_TO, amount: "1000000", network: "solana-devnet", facilitatorUrl: "https://sol.test", fetchFn: vi.fn() },
+    ]);
+    const next = makeNext();
+    const evmPayload = { accepted: { network: "eip155:84532", scheme: "exact" }, payload: {} };
+    await middleware(makeReq({ "payment-signature": toBase64(JSON.stringify(evmPayload)) }), makeRes(), next);
+
+    expect(next).toHaveBeenCalled();
+    const calls = evmFetch.mock.calls.map((a) => typeof a[0] === "string" ? a[0] : String(a[0]));
+    expect(calls.some((u) => u.includes("evm.test"))).toBe(true);
+  });
+
+  it("returns 402 with error when payment network doesn't match any option", async () => {
+    const middleware = x402Middleware([
+      { payTo: EVM_PAY_TO, amount: "1000000", network: "base-sepolia" },
+    ]);
+    const res = makeRes();
+    const next = makeNext();
+    const solPayload = { accepted: { network: "solana:devnet", scheme: "exact" }, payload: {} };
+    await middleware(makeReq({ "payment-signature": toBase64(JSON.stringify(solPayload)) }), res, next);
+
+    expect(res._status()).toBe(402);
+    expect(next).not.toHaveBeenCalled();
+    const body = res._body() as Record<string, unknown>;
+    expect(body.error).toMatch(/no payment option/i);
+  });
+});
+
 describe("x402Middleware — settle: false (verify-only mode)", () => {
   it("skips settle and calls next() after successful verify", async () => {
     const fetchFn = vi.fn(async (input: RequestInfo | URL) => {

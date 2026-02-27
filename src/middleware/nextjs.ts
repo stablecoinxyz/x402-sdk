@@ -1,15 +1,18 @@
 /**
  * withX402 — Next.js App Router wrapper for x402-gated route handlers.
  *
- * Usage:
- *   import { withX402 } from '@stablecoin.xyz/x402/middleware/nextjs'
- *   export const GET = withX402({ payTo: '0x...', amount: '1000000', network: 'base' }, async (req) => {
- *     return Response.json({ data: 'premium content' })
- *   })
+ * Usage (single network):
+ *   export const GET = withX402({ payTo: '0x...', amount: '1000000', network: 'base' }, handler)
+ *
+ * Usage (multi-network):
+ *   export const GET = withX402([
+ *     { payTo: '0x...', amount: '1000000000000000', network: 'base' },
+ *     { payTo: '2mSj...', amount: '1000000', network: 'solana' },
+ *   ], handler)
  */
 
 import { FacilitatorClient } from "../core/facilitator.js";
-import { SUPPORTED_NETWORKS } from "../core/networks.js";
+import { SUPPORTED_NETWORKS, toCAIP2 } from "../core/networks.js";
 import type { PaymentPayload, PaymentRequirementsResponse, PaymentRequirement } from "../core/types.js";
 
 export interface WithX402Options {
@@ -34,27 +37,30 @@ export interface WithX402Options {
 /** Next.js App Router handler type */
 type NextRouteHandler = (request: Request, context?: unknown) => Promise<Response> | Response;
 
+interface ResolvedEntry {
+  opt: WithX402Options & { settle: boolean };
+  asset: string;
+  facilitator: FacilitatorClient;
+}
+
 /**
  * Wrap a Next.js App Router route handler behind x402 payment.
  */
-export function withX402(opts: WithX402Options, handler: NextRouteHandler): NextRouteHandler {
-  const {
-    payTo,
-    amount,
-    network,
-    description,
-    facilitatorUrl,
-    settle = true,
-    fetchFn,
-  } = opts;
+export function withX402(opts: WithX402Options | WithX402Options[], handler: NextRouteHandler): NextRouteHandler {
+  const optArray = Array.isArray(opts) ? opts : [opts];
 
-  const networkConfig = SUPPORTED_NETWORKS[network];
-  if (!networkConfig) {
-    throw new Error(`withX402: unsupported network "${network}"`);
-  }
-
-  const asset = opts.asset ?? networkConfig.defaultAsset;
-  const facilitator = new FacilitatorClient({ facilitatorUrl, fetchFn });
+  // Validate all networks upfront and build resolved entries
+  const entries: ResolvedEntry[] = optArray.map((opt) => {
+    const networkConfig = SUPPORTED_NETWORKS[opt.network];
+    if (!networkConfig) {
+      throw new Error(`withX402: unsupported network "${opt.network}"`);
+    }
+    return {
+      opt: { ...opt, settle: opt.settle !== false },
+      asset: opt.asset ?? networkConfig.defaultAsset,
+      facilitator: new FacilitatorClient({ facilitatorUrl: opt.facilitatorUrl, fetchFn: opt.fetchFn }),
+    };
+  });
 
   return async function x402RouteHandler(request: Request, context?: unknown): Promise<Response> {
     const rawHeader =
@@ -62,28 +68,41 @@ export function withX402(opts: WithX402Options, handler: NextRouteHandler): Next
       request.headers.get("x-payment");
 
     if (!rawHeader) {
-      return build402Response(request.url, payTo, amount, asset, network, description);
+      return build402Response(request.url, entries);
     }
 
     let paymentPayload: PaymentPayload;
     try {
       paymentPayload = JSON.parse(fromBase64(rawHeader)) as PaymentPayload;
     } catch {
-      return build402Response(request.url, payTo, amount, asset, network, description, "Invalid payment header");
+      return build402Response(request.url, entries, "Invalid payment header");
     }
 
-    const requirement = buildRequirement(request.url, payTo, amount, asset, network, description);
+    // Match payment to requirement by CAIP-2 network
+    const paymentNetwork = paymentPayload.accepted?.network;
+    const matched = entries.find(({ opt }) => toCAIP2(opt.network) === paymentNetwork);
+
+    if (!matched) {
+      return build402Response(
+        request.url,
+        entries,
+        `No payment option found for network "${paymentNetwork}"`
+      );
+    }
+
+    const { opt, asset, facilitator } = matched;
+    const requirement = buildRequirement(request.url, opt.payTo, opt.amount, asset, opt.network, opt.description);
 
     try {
       // Verify
       const verifyResult = await facilitator.verify(paymentPayload, requirement);
       if (!verifyResult.isValid) {
-        return build402Response(request.url, payTo, amount, asset, network, description, verifyResult.invalidReason);
+        return build402Response(request.url, entries, verifyResult.invalidReason);
       }
 
       // Settle
       const responseHeaders = new Headers();
-      if (settle) {
+      if (opt.settle) {
         const settleResult = await facilitator.settle(paymentPayload, requirement);
         if (!settleResult.success) {
           return Response.json(
@@ -94,7 +113,9 @@ export function withX402(opts: WithX402Options, handler: NextRouteHandler): Next
 
         const txHash = settleResult.txHash ?? settleResult.transaction;
         if (txHash) {
-          const paymentResponse = toBase64(JSON.stringify({ success: true, transaction: txHash, network }));
+          const paymentResponse = toBase64(
+            JSON.stringify({ success: true, transaction: txHash, network: opt.network })
+          );
           responseHeaders.set("PAYMENT-RESPONSE", paymentResponse);
         }
       }
@@ -123,19 +144,21 @@ export function withX402(opts: WithX402Options, handler: NextRouteHandler): Next
 
 // ---- Helpers ----
 
+function buildRequirements(resource: string, entries: ResolvedEntry[]): PaymentRequirement[] {
+  return entries.map(({ opt, asset }) =>
+    buildRequirement(resource, opt.payTo, opt.amount, asset, opt.network, opt.description)
+  );
+}
+
 function build402Response(
   resource: string,
-  payTo: string,
-  amount: string,
-  asset: string,
-  network: string,
-  description?: string,
+  entries: ResolvedEntry[],
   errorMessage?: string
 ): Response {
-  const requirement = buildRequirement(resource, payTo, amount, asset, network, description);
+  const requirements = buildRequirements(resource, entries);
   const body: PaymentRequirementsResponse = {
     x402Version: 2,
-    accepts: [requirement],
+    accepts: requirements,
   };
 
   const paymentRequiredHeader = toBase64(JSON.stringify(body));

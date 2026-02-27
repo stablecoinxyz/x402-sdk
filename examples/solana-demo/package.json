@@ -4,10 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "tsx --env-file=.env client.ts"
+    "start": "tsx --env-file=.env client.ts",
+    "approve": "tsx --env-file=.env approve-delegate.ts"
   },
   "dependencies": {
     "@stablecoin.xyz/x402": "file:../..",
+    "@solana/web3.js": "^1.98.0",
+    "@solana/spl-token": "^0.4.9",
     "bs58": "^6.0.0"
   },
   "devDependencies": {

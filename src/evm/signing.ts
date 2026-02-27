@@ -343,15 +343,7 @@ export async function signTransferAuthorization(
 // ---- Helpers ----
 
 function randomHex32(): string {
-  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
-    const bytes = new Uint8Array(32);
-    crypto.getRandomValues(bytes);
-    return `0x${Array.from(bytes)
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("")}` as string;
-  }
-  // Node.js fallback
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { randomBytes } = require("crypto") as { randomBytes: (n: number) => Buffer };
-  return `0x${randomBytes(32).toString("hex")}` as string;
+  const bytes = new Uint8Array(32);
+  globalThis.crypto.getRandomValues(bytes);
+  return `0x${Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("")}`;
 }

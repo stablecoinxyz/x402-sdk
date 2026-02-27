@@ -4,13 +4,18 @@
  * Gates an Express route behind x402 payment.
  * No signing — server-side only validates incoming payment headers.
  *
- * Usage:
- *   import { x402Middleware } from '@stablecoin.xyz/x402/middleware/express'
+ * Usage (single network):
  *   app.use('/premium', x402Middleware({ payTo: '0x...', amount: '1000000', network: 'base' }))
+ *
+ * Usage (multi-network):
+ *   app.use('/premium', x402Middleware([
+ *     { payTo: '0x...', amount: '1000000000000000', network: 'base' },
+ *     { payTo: '2mSj...', amount: '1000000', network: 'solana' },
+ *   ]))
  */
 
 import { FacilitatorClient } from "../core/facilitator.js";
-import { SUPPORTED_NETWORKS } from "../core/networks.js";
+import { SUPPORTED_NETWORKS, toCAIP2 } from "../core/networks.js";
 import type {
   PaymentPayload,
   PaymentRequirementsResponse,
@@ -49,24 +54,27 @@ type ExpressResponse = {
 };
 type NextFunction = (err?: unknown) => void;
 
-export function x402Middleware(opts: X402MiddlewareOptions) {
-  const {
-    payTo,
-    amount,
-    network,
-    description,
-    facilitatorUrl,
-    settle = true,
-    fetchFn,
-  } = opts;
+interface ResolvedEntry {
+  opt: X402MiddlewareOptions & { settle: boolean };
+  asset: string;
+  facilitator: FacilitatorClient;
+}
 
-  const networkConfig = SUPPORTED_NETWORKS[network];
-  if (!networkConfig) {
-    throw new Error(`x402Middleware: unsupported network "${network}"`);
-  }
+export function x402Middleware(opts: X402MiddlewareOptions | X402MiddlewareOptions[]) {
+  const optArray = Array.isArray(opts) ? opts : [opts];
 
-  const asset = opts.asset ?? networkConfig.defaultAsset;
-  const facilitator = new FacilitatorClient({ facilitatorUrl, fetchFn });
+  // Validate all networks upfront and build resolved entries
+  const entries: ResolvedEntry[] = optArray.map((opt) => {
+    const networkConfig = SUPPORTED_NETWORKS[opt.network];
+    if (!networkConfig) {
+      throw new Error(`x402Middleware: unsupported network "${opt.network}"`);
+    }
+    return {
+      opt: { ...opt, settle: opt.settle !== false },
+      asset: opt.asset ?? networkConfig.defaultAsset,
+      facilitator: new FacilitatorClient({ facilitatorUrl: opt.facilitatorUrl, fetchFn: opt.fetchFn }),
+    };
+  });
 
   return async function x402Handler(req: ExpressRequest, res: ExpressResponse, next: NextFunction) {
     const rawHeader =
@@ -74,28 +82,41 @@ export function x402Middleware(opts: X402MiddlewareOptions) {
       (req.headers["x-payment"] as string);
 
     if (!rawHeader) {
-      return send402(res, req.url, payTo, amount, asset, network, 300, description);
+      return send402(res, buildRequirements(req.url, entries));
     }
 
     let paymentPayload: PaymentPayload;
     try {
       paymentPayload = JSON.parse(fromBase64(rawHeader)) as PaymentPayload;
     } catch {
-      return send402(res, req.url, payTo, amount, asset, network, 300, description, "Invalid payment header");
+      return send402(res, buildRequirements(req.url, entries), "Invalid payment header");
     }
 
-    const requirement = buildRequirement(req.url, payTo, amount, asset, network, description);
+    // Match payment to requirement by CAIP-2 network
+    const paymentNetwork = paymentPayload.accepted?.network;
+    const matched = entries.find(({ opt }) => toCAIP2(opt.network) === paymentNetwork);
+
+    if (!matched) {
+      return send402(
+        res,
+        buildRequirements(req.url, entries),
+        `No payment option found for network "${paymentNetwork}"`
+      );
+    }
+
+    const { opt, asset, facilitator } = matched;
+    const requirement = buildRequirement(req.url, opt.payTo, opt.amount, asset, opt.network, opt.description);
 
     try {
       // Verify
       const verifyResult = await facilitator.verify(paymentPayload, requirement);
       console.log("[x402] verify →", JSON.stringify(verifyResult));
       if (!verifyResult.isValid) {
-        return send402(res, req.url, payTo, amount, asset, network, 300, description, verifyResult.invalidReason);
+        return send402(res, buildRequirements(req.url, entries), verifyResult.invalidReason);
       }
 
       // Settle
-      if (settle) {
+      if (opt.settle) {
         const settleResult = await facilitator.settle(paymentPayload, requirement);
         console.log("[x402] settle →", JSON.stringify(settleResult));
         if (!settleResult.success) {
@@ -104,10 +125,11 @@ export function x402Middleware(opts: X402MiddlewareOptions) {
           });
         }
 
-        // Attach PAYMENT-RESPONSE header
         const txHash = settleResult.txHash ?? settleResult.transaction;
         if (txHash) {
-          const paymentResponse = toBase64(JSON.stringify({ success: true, transaction: txHash, network }));
+          const paymentResponse = toBase64(
+            JSON.stringify({ success: true, transaction: txHash, network: opt.network })
+          );
           res.setHeader("PAYMENT-RESPONSE", paymentResponse);
         }
       }
@@ -123,26 +145,23 @@ export function x402Middleware(opts: X402MiddlewareOptions) {
 
 // ---- Helpers ----
 
+function buildRequirements(resource: string, entries: ResolvedEntry[]): PaymentRequirement[] {
+  return entries.map(({ opt, asset }) =>
+    buildRequirement(resource, opt.payTo, opt.amount, asset, opt.network, opt.description)
+  );
+}
+
 function send402(
   res: ExpressResponse,
-  resource: string,
-  payTo: string,
-  amount: string,
-  asset: string,
-  network: string,
-  maxTimeoutSeconds: number,
-  description?: string,
+  requirements: PaymentRequirement[],
   errorMessage?: string
 ) {
-  const requirement = buildRequirement(resource, payTo, amount, asset, network, description, maxTimeoutSeconds);
   const body: PaymentRequirementsResponse = {
     x402Version: 2,
-    accepts: [requirement],
+    accepts: requirements,
   };
-
   const paymentRequiredHeader = toBase64(JSON.stringify(body));
   res.setHeader("PAYMENT-REQUIRED", paymentRequiredHeader);
-
   return res.status(402).json({
     ...body,
     ...(errorMessage ? { error: errorMessage } : {}),
@@ -193,4 +212,3 @@ function fromBase64(str: string): string {
       .join("")
   );
 }
-
