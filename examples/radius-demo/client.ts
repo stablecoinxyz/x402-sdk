@@ -1,8 +1,8 @@
 /**
- * x402 EVM client example
+ * x402 Radius client example
  *
  * Calls an x402-gated endpoint using the @stablecoin.xyz/x402 SDK.
- * Signs ERC-2612 Permit payments with a viem WalletClient.
+ * Signs ERC-2612 Permit payments with a viem WalletClient on Radius.
  *
  * Usage:
  *   PRIVATE_KEY=0x... npx tsx client.ts [url]
@@ -13,9 +13,8 @@
  * Defaults to http://localhost:4402/premium (the express-server example).
  */
 
-import { createWalletClient, http } from "viem";
+import { createWalletClient, http, defineChain } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { base } from "viem/chains";
 import { createX402Client, viemSignerAdapter } from "@stablecoin.xyz/x402/evm";
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY as `0x${string}` | undefined;
@@ -25,7 +24,20 @@ if (!PRIVATE_KEY) {
 }
 
 const TARGET_URL = process.argv[2] || "http://localhost:4402/premium";
-const RPC_URL = process.env.RPC_URL || "https://mainnet.base.org";
+const RPC_URL = process.env.RPC_URL;
+if (!RPC_URL) {
+  console.error("Error: RPC_URL env var required for Radius");
+  process.exit(1);
+}
+
+const radius = defineChain({
+  id: 723,
+  name: "Radius",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  rpcUrls: {
+    default: { http: [RPC_URL] },
+  },
+});
 
 const account = privateKeyToAccount(PRIVATE_KEY);
 console.log(`Wallet: ${account.address}`);
@@ -34,12 +46,13 @@ console.log();
 
 const walletClient = createWalletClient({
   account,
-  chain: base,
+  chain: radius,
   transport: http(RPC_URL),
 });
 
 const client = createX402Client({
   signer: viemSignerAdapter(walletClient),
+  network: "radius",
   rpcUrl: RPC_URL,
 });
 

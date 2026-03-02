@@ -1,10 +1,11 @@
 # x402 SDK Examples
 
-Three examples to manually verify the SDK end-to-end:
+Four examples to manually verify the SDK end-to-end:
 
-1. **express-server** — Express API gated with `x402Middleware` (EVM + Solana)
-2. **evm-demo** — EVM client (Base mainnet, ERC-2612 Permit — no pre-approval needed)
-3. **solana-demo** — Solana client (Ed25519 signature — requires one-time delegate approval)
+1. **express-server** — Express API gated with `x402Middleware` (Base + Radius + Solana)
+2. **base-demo** — Base client (ERC-2612 Permit — no pre-approval needed)
+3. **radius-demo** — Radius client (ERC-2612 Permit — no pre-approval needed)
+4. **solana-demo** — Solana client (Ed25519 signature — requires one-time delegate approval)
 
 ---
 
@@ -15,7 +16,7 @@ Three examples to manually verify the SDK end-to-end:
 ```bash
 cd express-server
 cp .env.example .env
-# Set PAY_TO (EVM address) and optionally SOLANA_PAY_TO (Solana address)
+# Set BASE_PAY_TO, and optionally RADIUS_PAY_TO / SOLANA_PAY_TO
 pnpm install
 pnpm start
 ```
@@ -25,14 +26,14 @@ Endpoints:
 - `GET /premium` — x402 gated
 - `GET /health` — health check
 
-The server advertises all configured networks in the `accepts[]` array of the 402 response. If only `PAY_TO` is set, it accepts EVM only. Set both `PAY_TO` and `SOLANA_PAY_TO` to accept both.
+The server advertises all configured networks in the `accepts[]` array of the 402 response. Base is always enabled. Set `RADIUS_PAY_TO` and/or `SOLANA_PAY_TO` to accept additional networks.
 
 ---
 
-### 2a. Run the EVM client (Base mainnet)
+### 2a. Run the Base client
 
 ```bash
-cd evm-demo
+cd base-demo
 cp .env.example .env
 # Set PRIVATE_KEY=0x... (wallet must hold SBC on Base mainnet)
 pnpm install
@@ -46,7 +47,25 @@ No setup beyond a funded wallet. ERC-2612 Permit is signed off-chain — no on-c
 
 ---
 
-### 2b. Run the Solana client
+### 2b. Run the Radius client
+
+```bash
+cd radius-demo
+cp .env.example .env
+# Set PRIVATE_KEY=0x... and RPC_URL (wallet must hold SBC on Radius)
+pnpm install
+pnpm start
+```
+
+Same Permit-based flow as Base — no on-chain approval needed.
+
+**Requirements:**
+- Wallet holds SBC on Radius (chain ID 723)
+- `RPC_URL` env var set to a Radius RPC endpoint
+
+---
+
+### 2c. Run the Solana client
 
 ```bash
 cd solana-demo
@@ -79,8 +98,9 @@ pnpm start
 
 Change the server's `.env`:
 ```
-NETWORK=base-sepolia
+BASE_NETWORK=base-sepolia
+RADIUS_NETWORK=radius-testnet
 SOLANA_NETWORK=solana-devnet
 ```
 
-The EVM client uses whatever network the server advertises — no client-side changes needed.
+The clients use whatever network the server advertises — no client-side changes needed.

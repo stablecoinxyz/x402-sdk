@@ -266,8 +266,11 @@ Runnable end-to-end examples in [`examples/`](./examples/README.md):
 # Terminal 1 — server (accepts EVM + Solana)
 cd examples/express-server && cp .env.example .env && pnpm install && pnpm start
 
-# Terminal 2 — EVM client
-cd examples/evm-demo && cp .env.example .env && pnpm install && pnpm start
+# Terminal 2 — Base client
+cd examples/base-demo && cp .env.example .env && pnpm install && pnpm start
+
+# Terminal 2 — Radius client
+cd examples/radius-demo && cp .env.example .env && pnpm install && pnpm start
 
 # Terminal 2 — Solana client (run pnpm approve first)
 cd examples/solana-demo && cp .env.example .env && pnpm install && pnpm approve && pnpm start

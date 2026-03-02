@@ -35,8 +35,8 @@ export const SUPPORTED_NETWORKS: Record<string, NetworkConfig> = {
     rpcUrl: "", // Must be provided via client options
     facilitatorUrl: "https://x402.stablecoin.xyz",
     facilitatorAddress: "0xdeE710bB6a3b652C35B5cB74E7bdb03EE1F641E6",
-    defaultAsset: "", // Must be provided via client options
-    explorerUrl: "",
+    defaultAsset: "0x33ad9e4bd16b69b5bfded37d8b5d9ff9aba014fb", // SBC on Radius (6 decimals)
+    explorerUrl: "https://network.radiustech.xyz",
     decimals: 6,
     tokenName: "Stable Coin",
   },
@@ -46,8 +46,8 @@ export const SUPPORTED_NETWORKS: Record<string, NetworkConfig> = {
     rpcUrl: "", // Must be provided via client options
     facilitatorUrl: "https://x402.stablecoin.xyz",
     facilitatorAddress: "0xdeE710bB6a3b652C35B5cB74E7bdb03EE1F641E6",
-    defaultAsset: "", // Must be provided via client options
-    explorerUrl: "",
+    defaultAsset: "0x33ad9e4bd16b69b5bfded37d8b5d9ff9aba014fb", // SBC on Radius Testnet (6 decimals)
+    explorerUrl: "https://testnet.radiustech.xyz",
     decimals: 6,
     tokenName: "Stable Coin",
   },
