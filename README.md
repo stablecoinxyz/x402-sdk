@@ -163,8 +163,8 @@ Amounts are in atomic units (no decimals). SBC has different precision per chain
 |-------------|-------|-------|
 | `base` | Base mainnet | SBC: `0xfdcC3dd6671eaB0709A4C0f3F53De9a333d80798` |
 | `base-sepolia` | Base Sepolia | SBC: `0xf9FB20B8E097904f0aB7d12e9DbeE88f2dcd0F16` — free test tokens |
-| `radius` | Radius mainnet | |
-| `radius-testnet` | Radius testnet | |
+| `radius` | Radius mainnet | SBC: `0x33ad9e4bd16b69b5bfded37d8b5d9ff9aba014fb` |
+| `radius-testnet` | Radius testnet | SBC: `0x33ad9e4bd16b69b5bfded37d8b5d9ff9aba014fb` — free test tokens |
 | `solana` | Solana mainnet | SBC: `DBAzBUXaLj1qANCseUPZz4sp9F8d2sc78C4vKjhbTGMA` |
 | `solana-devnet` | Solana devnet | Free test tokens |
 
