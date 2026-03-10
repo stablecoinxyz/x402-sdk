@@ -32,8 +32,6 @@ export interface UseX402Options {
   rpcUrl?: string;
   /** Skip balance check (saves an RPC call). Default: false. */
   skipBalanceCheck?: boolean;
-  /** API key for mainnet access. Required for Base, Radius, and Solana mainnet. Get yours at dashboard.stablecoin.xyz */
-  apiKey?: string;
 }
 
 export interface UseX402Return {
@@ -72,7 +70,7 @@ export function useX402(options: UseX402Options): UseX402Return {
       url: string,
       fetchOptions?: RequestInit & { preferredNetwork?: string; maxAmount?: string }
     ): Promise<Response & { paymentResult?: PaymentResult }> => {
-      const { signer, network, facilitatorUrl, rpcUrl, skipBalanceCheck, apiKey } = optionsRef.current;
+      const { signer, network, facilitatorUrl, rpcUrl, skipBalanceCheck } = optionsRef.current;
 
       if (!signer) {
         throw new Error("useX402: no signer connected — connect a wallet first.");
@@ -97,7 +95,6 @@ export function useX402(options: UseX402Options): UseX402Return {
         facilitatorUrl,
         rpcUrl,
         skipBalanceCheck,
-        apiKey,
         fetchFn: trackedFetchFn as unknown as typeof fetch,
       };
 

@@ -31,8 +31,6 @@ export interface X402ClientOptions {
   rpcUrl?: string;
   /** Skip balance check before signing (faster, saves an RPC round-trip). Default: false. */
   skipBalanceCheck?: boolean;
-  /** API key for mainnet access. Required for Base, Radius, and Solana mainnet. Get yours at dashboard.stablecoin.xyz */
-  apiKey?: string;
   /** Custom fetch implementation (for testing). */
   fetchFn?: typeof fetch;
 }
@@ -54,9 +52,9 @@ export interface X402Client {
 }
 
 export function createX402Client(options: X402ClientOptions): X402Client {
-  const { signer, network, facilitatorUrl, rpcUrl, skipBalanceCheck = false, fetchFn, apiKey } = options;
+  const { signer, network, facilitatorUrl, rpcUrl, skipBalanceCheck = false, fetchFn } = options;
   const fetchImpl = fetchFn ?? (globalThis.fetch as typeof fetch);
-  const facilitator = new FacilitatorClient({ facilitatorUrl, fetchFn: fetchImpl, apiKey });
+  const facilitator = new FacilitatorClient({ facilitatorUrl, fetchFn: fetchImpl });
 
   return {
     async fetch(url, requestOptions = {}) {

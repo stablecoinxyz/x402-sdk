@@ -27,8 +27,6 @@ export interface SolanaX402ClientOptions {
   network?: string;
   /** Override the facilitator URL. Defaults to network config. */
   facilitatorUrl?: string;
-  /** API key for mainnet access. Required for Solana mainnet. Get yours at dashboard.stablecoin.xyz */
-  apiKey?: string;
   /** Custom fetch implementation (for testing). */
   fetchFn?: typeof fetch;
 }
@@ -47,9 +45,9 @@ export interface SolanaX402Client {
 }
 
 export function createSolanaX402Client(options: SolanaX402ClientOptions): SolanaX402Client {
-  const { signer, network, facilitatorUrl, fetchFn, apiKey } = options;
+  const { signer, network, facilitatorUrl, fetchFn } = options;
   const fetchImpl = fetchFn ?? (globalThis.fetch as typeof fetch);
-  const facilitator = new FacilitatorClient({ facilitatorUrl, fetchFn: fetchImpl, apiKey });
+  const facilitator = new FacilitatorClient({ facilitatorUrl, fetchFn: fetchImpl });
 
   return {
     async fetch(url, requestOptions = {}) {

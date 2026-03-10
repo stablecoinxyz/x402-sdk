@@ -17,7 +17,6 @@ const BASE_PAY_TO = process.env.BASE_PAY_TO || process.env.PAY_TO || "0xbb46c0c1
 const BASE_AMOUNT = process.env.BASE_AMOUNT || process.env.AMOUNT || "1000000000000000"; // 0.001 SBC (18 decimals)
 const BASE_NETWORK = process.env.BASE_NETWORK || process.env.NETWORK || "base";
 const PORT = process.env.PORT || 4402;
-const API_KEY = process.env.API_KEY; // required for mainnet — get at dashboard.stablecoin.xyz
 
 // Optional: add Radius payment option
 const RADIUS_PAY_TO = process.env.RADIUS_PAY_TO;
@@ -30,12 +29,12 @@ const SOLANA_AMOUNT = process.env.SOLANA_AMOUNT || "1000000"; // 0.001 SBC on So
 const SOLANA_NETWORK = process.env.SOLANA_NETWORK || "solana";
 
 const paymentOptions: X402MiddlewareOptions[] = [
-  { payTo: BASE_PAY_TO, amount: BASE_AMOUNT, network: BASE_NETWORK, apiKey: API_KEY },
+  { payTo: BASE_PAY_TO, amount: BASE_AMOUNT, network: BASE_NETWORK },
   ...(RADIUS_PAY_TO
-    ? [{ payTo: RADIUS_PAY_TO, amount: RADIUS_AMOUNT, network: RADIUS_NETWORK, apiKey: API_KEY } as X402MiddlewareOptions]
+    ? [{ payTo: RADIUS_PAY_TO, amount: RADIUS_AMOUNT, network: RADIUS_NETWORK } as X402MiddlewareOptions]
     : []),
   ...(SOLANA_PAY_TO
-    ? [{ payTo: SOLANA_PAY_TO, amount: SOLANA_AMOUNT, network: SOLANA_NETWORK, apiKey: API_KEY } as X402MiddlewareOptions]
+    ? [{ payTo: SOLANA_PAY_TO, amount: SOLANA_AMOUNT, network: SOLANA_NETWORK } as X402MiddlewareOptions]
     : []),
 ];
 
