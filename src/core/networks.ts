@@ -30,7 +30,7 @@ export const SUPPORTED_NETWORKS: Record<string, NetworkConfig> = {
     tokenName: "Stable Coin",
   },
   radius: {
-    chainId: 723,
+    chainId: 723487,
     name: "Radius",
     rpcUrl: "", // Must be provided via client options
     facilitatorUrl: "https://x402.stablecoin.xyz",

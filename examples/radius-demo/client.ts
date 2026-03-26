@@ -31,7 +31,7 @@ if (!RPC_URL) {
 }
 
 const radius = defineChain({
-  id: 723,
+  id: 723487,
   name: "Radius",
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   rpcUrls: {

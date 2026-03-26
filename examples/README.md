@@ -60,7 +60,7 @@ pnpm start
 Same Permit-based flow as Base — no on-chain approval needed.
 
 **Requirements:**
-- Wallet holds SBC on Radius (chain ID 723)
+- Wallet holds SBC on Radius (chain ID 723487)
 - `RPC_URL` env var set to a Radius RPC endpoint
 
 ---

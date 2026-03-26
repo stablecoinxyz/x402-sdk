@@ -18,9 +18,9 @@ describe("SUPPORTED_NETWORKS", () => {
     expect(testnet.facilitatorUrl).toBe("https://x402.stablecoin.xyz");
   });
 
-  it("contains radius with chainId 723", () => {
+  it("contains radius with chainId 723487", () => {
     const radius = SUPPORTED_NETWORKS["radius"];
-    expect(radius.chainId).toBe(723);
+    expect(radius.chainId).toBe(723487);
     expect(radius.facilitatorUrl).toBe("https://x402.stablecoin.xyz");
   });
 
