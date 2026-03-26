@@ -1,6 +1,6 @@
 {
   "name": "@stablecoin.xyz/x402",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "x402 HTTP payment protocol SDK — pay for APIs and gate your own with SBC stablecoin",
   "license": "MIT",
   "repository": {
