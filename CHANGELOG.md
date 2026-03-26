@@ -1,5 +1,11 @@
 # @stablecoin.xyz/x402
 
+## 0.3.2
+
+### Patch Changes
+
+- 6857b8e: Update Radius mainnet chain ID from 723 to 723487
+
 ## 0.2.0
 
 ### Minor Changes
