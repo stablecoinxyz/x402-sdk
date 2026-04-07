@@ -216,6 +216,7 @@ export async function signPermit(
         from: signer.address,
         to: spender,
         value,
+        validAfter: "0",
         validBefore,
         nonce: nonce.toString(),
       },

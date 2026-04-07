@@ -1,17 +1,15 @@
 /**
- * x402Middleware for Express
+ * paywall — Express middleware for x402 payment-gated routes.
  *
- * Gates an Express route behind x402 payment.
- * No signing — server-side only validates incoming payment headers.
+ * Usage:
+ *   import { paywall } from '@stablecoin.xyz/x402/middleware/express'
+ *   app.get('/premium', paywall({ payTo: '0x...', amount: '1000', network: 'base-sepolia' }), handler)
  *
- * Usage (single network):
- *   app.use('/premium', x402Middleware({ payTo: '0x...', amount: '1000000', network: 'base' }))
- *
- * Usage (multi-network):
- *   app.use('/premium', x402Middleware([
+ * Multi-network:
+ *   app.get('/premium', paywall([
  *     { payTo: '0x...', amount: '1000000000000000', network: 'base' },
  *     { payTo: '2mSj...', amount: '1000000', network: 'solana' },
- *   ]))
+ *   ]), handler)
  */
 
 import { FacilitatorClient } from "../core/facilitator.js";
@@ -60,7 +58,7 @@ interface ResolvedEntry {
   facilitator: FacilitatorClient;
 }
 
-export function x402Middleware(opts: X402MiddlewareOptions | X402MiddlewareOptions[]) {
+export function paywall(opts: X402MiddlewareOptions | X402MiddlewareOptions[]) {
   const optArray = Array.isArray(opts) ? opts : [opts];
 
   // Validate all networks upfront and build resolved entries
@@ -212,3 +210,6 @@ function fromBase64(str: string): string {
       .join("")
   );
 }
+
+/** @deprecated Use `paywall` instead. */
+export const x402Middleware = paywall;
