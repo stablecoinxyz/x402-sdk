@@ -33,15 +33,6 @@ export interface TransferAuthorization {
   nonce: string;
 }
 
-export interface SbcPaymentPayload {
-  signature: string;
-  from: string;
-  to: string;
-  amount: string;
-  nonce: number;
-  deadline: number;
-}
-
 export interface Eip3009Payload {
   signature: string;
   authorization: TransferAuthorization;
@@ -75,7 +66,6 @@ export interface SolanaPaymentPayload {
 }
 
 export type PaymentPayloadInner =
-  | SbcPaymentPayload
   | Eip3009Payload
   | AuthorizationPayload
   | SolanaPaymentPayload;

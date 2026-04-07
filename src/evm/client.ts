@@ -7,7 +7,7 @@
  */
 
 import type { EvmSigner } from "./signer.js";
-import { signPermit, signSbcPayment, signTransferAuthorization, getTokenBalance } from "./signing.js";
+import { signPermit, signTransferAuthorization, getTokenBalance } from "./signing.js";
 import { FacilitatorClient } from "../core/facilitator.js";
 import { SUPPORTED_NETWORKS, toCAIP2 } from "../core/networks.js";
 import { InsufficientBalanceError } from "../core/errors.js";
@@ -176,39 +176,23 @@ async function buildPaymentPayload(
     "0x124b082e8df36258198da4caa3b39c7dfa64d9ce";
 
   if (isSbcNetwork) {
-    // Permit: ERC-2612 (preferred — no pre-approval needed)
+    // ERC-2612 Permit — gasless, no pre-approval needed
     const tokenName = requirement.extra?.name ?? "SBC";
-    try {
-      const { payload } = await signPermit(signer, {
-        network: requirement.network,
-        spender: facilitatorAddress,
-        value: requirement.maxAmountRequired,
-        tokenAddress: requirement.asset,
-        tokenName,
-        validForSeconds: requirement.maxTimeoutSeconds,
-        rpcUrlOverride,
-        fetchFn,
-      });
+    const { payload } = await signPermit(signer, {
+      network: requirement.network,
+      spender: facilitatorAddress,
+      value: requirement.maxAmountRequired,
+      tokenAddress: requirement.asset,
+      tokenName,
+      validForSeconds: requirement.maxTimeoutSeconds,
+      rpcUrlOverride,
+      fetchFn,
+    });
 
-      return {
-        accepted: { network: toCAIP2(requirement.network), scheme: requirement.scheme },
-        payload,
-      };
-    } catch {
-      // Fallback: SBC Payment (legacy pre-approval flow)
-      const { payload } = await signSbcPayment(signer, {
-        network: requirement.network,
-        to: requirement.payTo,
-        amount: requirement.maxAmountRequired,
-        facilitatorAddress,
-        validForSeconds: requirement.maxTimeoutSeconds,
-      });
-
-      return {
-        accepted: { network: toCAIP2(requirement.network), scheme: requirement.scheme },
-        payload,
-      };
-    }
+    return {
+      accepted: { network: toCAIP2(requirement.network), scheme: requirement.scheme },
+      payload,
+    };
   }
 
   // EIP-3009 TransferWithAuthorization (for USDC etc.)

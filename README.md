@@ -46,11 +46,11 @@ npm install react
 **Express:**
 
 ```typescript
-import { x402Middleware } from '@stablecoin.xyz/x402/middleware/express'
+import { paywall } from '@stablecoin.xyz/x402/middleware/express'
 
 app.get(
   '/premium',
-  x402Middleware({
+  paywall({
     payTo: '0xYourAddress',
     amount: '1000000000000000', // 0.001 SBC — see token amounts below
     network: 'base',
@@ -62,9 +62,9 @@ app.get(
 **Next.js App Router:**
 
 ```typescript
-import { withX402 } from '@stablecoin.xyz/x402/middleware/nextjs'
+import { paywall } from '@stablecoin.xyz/x402/middleware/nextjs'
 
-export const GET = withX402(
+export const GET = paywall(
   { payTo: '0xYourAddress', amount: '1000000000000000', network: 'base' },
   async (req) => Response.json({ data: 'premium content' })
 )
@@ -73,7 +73,7 @@ export const GET = withX402(
 **Accept EVM + Solana (multi-network):**
 
 ```typescript
-x402Middleware([
+paywall([
   { payTo: '0xYourEvmAddress',     amount: '1000000000000000', network: 'base' },
   { payTo: 'YourSolanaAddress',    amount: '1000000',          network: 'solana' },
 ])
@@ -222,8 +222,8 @@ type PaymentResult = {
 }
 ```
 
-### `x402Middleware(options | options[])` — `/middleware/express`
-### `withX402(options | options[], handler)` — `/middleware/nextjs`
+### `paywall(options | options[])` — `/middleware/express`
+### `paywall(options | options[], handler)` — `/middleware/nextjs`
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
@@ -252,8 +252,8 @@ ethersSignerAdapter(signer)       // ethers.js v5/v6 Signer
 | `@stablecoin.xyz/x402` | Core types, errors, network config |
 | `@stablecoin.xyz/x402/evm` | `createX402Client`, signer adapters |
 | `@stablecoin.xyz/x402/solana` | `createSolanaX402Client`, signer adapters |
-| `@stablecoin.xyz/x402/middleware/express` | `x402Middleware` |
-| `@stablecoin.xyz/x402/middleware/nextjs` | `withX402` |
+| `@stablecoin.xyz/x402/middleware/express` | `paywall` |
+| `@stablecoin.xyz/x402/middleware/nextjs` | `paywall` |
 | `@stablecoin.xyz/x402/react` | `useX402` hook |
 
 ---

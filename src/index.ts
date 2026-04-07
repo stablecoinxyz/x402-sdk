@@ -29,7 +29,6 @@ export type {
   VerifyResponse,
   SettleResponse,
   AuthorizationPayload,
-  SbcPaymentPayload,
   SolanaPaymentPayload,
   Eip3009Payload,
   TransferAuthorization,

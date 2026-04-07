@@ -8,7 +8,6 @@
 import type { EvmSigner } from "./signer.js";
 import type {
   AuthorizationPayload,
-  SbcPaymentPayload,
   TransferAuthorization,
   Eip3009Payload,
 } from "../core/types.js";
@@ -23,16 +22,6 @@ const PERMIT_TYPES = {
     { name: "owner", type: "address" },
     { name: "spender", type: "address" },
     { name: "value", type: "uint256" },
-    { name: "nonce", type: "uint256" },
-    { name: "deadline", type: "uint256" },
-  ],
-};
-
-const SBC_PAYMENT_TYPES = {
-  Payment: [
-    { name: "from", type: "address" },
-    { name: "to", type: "address" },
-    { name: "amount", type: "uint256" },
     { name: "nonce", type: "uint256" },
     { name: "deadline", type: "uint256" },
   ],
@@ -221,69 +210,6 @@ export async function signPermit(
         nonce: nonce.toString(),
       },
       signature,
-    },
-  };
-}
-
-export interface SignSbcPaymentResult {
-  payload: SbcPaymentPayload;
-}
-
-/**
- * Sign an SBC Payment message (V1 x402 flow).
- */
-export async function signSbcPayment(
-  signer: EvmSigner,
-  params: {
-    network: string;
-    to: string;
-    amount: string;
-    facilitatorAddress: string;
-    validForSeconds?: number;
-  }
-): Promise<SignSbcPaymentResult> {
-  const { network, to, amount, facilitatorAddress, validForSeconds = 300 } = params;
-  const config = getNetworkConfig(network);
-
-  const now = Math.floor(Date.now() / 1000);
-  const payment = {
-    from: signer.address,
-    to,
-    amount,
-    nonce: now,
-    deadline: now + validForSeconds,
-  };
-
-  const domain = {
-    name: "SBC x402 Facilitator",
-    version: "1",
-    chainId: config.chainId,
-    verifyingContract: facilitatorAddress,
-  };
-
-  const message = {
-    from: payment.from,
-    to: payment.to,
-    amount: BigInt(payment.amount),
-    nonce: BigInt(payment.nonce),
-    deadline: BigInt(payment.deadline),
-  };
-
-  const signature = await signer.signTypedData({
-    domain,
-    types: SBC_PAYMENT_TYPES,
-    primaryType: "Payment",
-    message,
-  });
-
-  return {
-    payload: {
-      signature,
-      from: payment.from,
-      to: payment.to,
-      amount: payment.amount,
-      nonce: payment.nonce,
-      deadline: payment.deadline,
     },
   };
 }

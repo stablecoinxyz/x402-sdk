@@ -9,7 +9,7 @@
  */
 
 import express from "express";
-import { x402Middleware, type X402MiddlewareOptions } from "@stablecoin.xyz/x402/middleware/express";
+import { paywall, type X402MiddlewareOptions } from "@stablecoin.xyz/x402/middleware/express";
 import { getNetworkConfig } from "@stablecoin.xyz/x402";
 
 // Base (default EVM network)
@@ -46,7 +46,7 @@ app.get("/free", (_req, res) => {
 
 app.get(
   "/premium",
-  x402Middleware(paymentOptions.length === 1 ? paymentOptions[0] : paymentOptions),
+  paywall(paymentOptions.length === 1 ? paymentOptions[0] : paymentOptions),
   (_req, res) => {
     res.json({
       data: "exclusive content — you paid for this",
