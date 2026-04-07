@@ -3,7 +3,6 @@ import {
   getPermitNonce,
   getTokenBalance,
   signPermit,
-  signSbcPayment,
   signTransferAuthorization,
 } from "../../src/evm/signing.js";
 import { NetworkError } from "../../src/core/errors.js";
@@ -184,6 +183,7 @@ describe("signPermit", () => {
     expect(result.payload.authorization.from).toBe(OWNER);
     expect(result.payload.authorization.to).toBe(SPENDER);
     expect(result.payload.authorization.value).toBe("1000000");
+    expect(result.payload.authorization.validAfter).toBe("0");
     expect(typeof result.payload.authorization.validBefore).toBe("number");
     expect(result.payload.authorization.nonce).toBe("0");
     expect(result.payload.signature).toBe(MOCK_SIG);
@@ -219,71 +219,6 @@ describe("signPermit", () => {
     const after = Math.floor(Date.now() / 1000);
     expect(result.payload.authorization.validBefore).toBeGreaterThanOrEqual(before + 300);
     expect(result.payload.authorization.validBefore).toBeLessThanOrEqual(after + 300);
-  });
-});
-
-// ---- signSbcPayment ----
-
-describe("signSbcPayment", () => {
-  it("constructs domain with facilitator as verifyingContract", async () => {
-    const signer = createMockSigner(OWNER);
-
-    const result = await signSbcPayment(signer, {
-      network: "base-sepolia",
-      to: "0xrecipient000000000000000000000000000000000",
-      amount: "500000",
-      facilitatorAddress: SPENDER,
-    });
-
-    const { domain } = signer.calls[0];
-    expect(domain.name).toBe("SBC x402 Facilitator");
-    expect(domain.verifyingContract).toBe(SPENDER); // facilitator, not token
-    expect(domain.chainId).toBe(84532);
-    expect(domain.version).toBe("1");
-    expect(result.payload.from).toBe(OWNER);
-  });
-
-  it("passes amount and addresses as BigInt in message", async () => {
-    const signer = createMockSigner(OWNER);
-
-    await signSbcPayment(signer, {
-      network: "base",
-      to: "0xrecipient000000000000000000000000000000000",
-      amount: "1000000000000000000",
-      facilitatorAddress: SPENDER,
-    });
-
-    const { message } = signer.calls[0];
-    expect(message.amount).toBe(1000000000000000000n);
-    expect(typeof message.nonce).toBe("bigint");
-    expect(typeof message.deadline).toBe("bigint");
-  });
-
-  it("nonce is a timestamp (prevents replay)", async () => {
-    const signer = createMockSigner(OWNER);
-    const before = Math.floor(Date.now() / 1000);
-
-    const result = await signSbcPayment(signer, {
-      network: "base",
-      to: "0xrecipient000000000000000000000000000000000",
-      amount: "100",
-      facilitatorAddress: SPENDER,
-    });
-
-    const after = Math.floor(Date.now() / 1000);
-    expect(result.payload.nonce).toBeGreaterThanOrEqual(before);
-    expect(result.payload.nonce).toBeLessThanOrEqual(after);
-  });
-
-  it("uses Payment as primaryType", async () => {
-    const signer = createMockSigner(OWNER);
-    await signSbcPayment(signer, {
-      network: "base",
-      to: "0xrecipient",
-      amount: "100",
-      facilitatorAddress: SPENDER,
-    });
-    expect(signer.calls[0].primaryType).toBe("Payment");
   });
 });
 
