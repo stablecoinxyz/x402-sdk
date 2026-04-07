@@ -189,19 +189,6 @@ describe("signPermit", () => {
     expect(result.payload.signature).toBe(MOCK_SIG);
   });
 
-  it("throws NetworkError when RPC URL is missing for radius", async () => {
-    const signer = createMockSigner(OWNER);
-
-    await expect(signPermit(signer, {
-      network: "radius",
-      spender: SPENDER,
-      value: "1000000",
-      tokenAddress: TOKEN,
-      tokenName: "SBC",
-      // no rpcUrlOverride, and radius has empty rpcUrl in SUPPORTED_NETWORKS
-    })).rejects.toThrow(NetworkError);
-  });
-
   it("validBefore is approximately now + validForSeconds", async () => {
     const signer = createMockSigner(OWNER);
     const before = Math.floor(Date.now() / 1000);

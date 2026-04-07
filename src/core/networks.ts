@@ -32,7 +32,7 @@ export const SUPPORTED_NETWORKS: Record<string, NetworkConfig> = {
   radius: {
     chainId: 723487,
     name: "Radius",
-    rpcUrl: "", // Must be provided via client options
+    rpcUrl: "https://rpc.radiustech.xyz",
     facilitatorUrl: "https://x402.stablecoin.xyz",
     facilitatorAddress: "0xdeE710bB6a3b652C35B5cB74E7bdb03EE1F641E6",
     defaultAsset: "0x33ad9e4bd16b69b5bfded37d8b5d9ff9aba014fb", // SBC on Radius (6 decimals)
@@ -43,7 +43,7 @@ export const SUPPORTED_NETWORKS: Record<string, NetworkConfig> = {
   "radius-testnet": {
     chainId: 72344,
     name: "Radius Testnet",
-    rpcUrl: "", // Must be provided via client options
+    rpcUrl: "https://rpc.testnet.radiustech.xyz",
     facilitatorUrl: "https://x402.stablecoin.xyz",
     facilitatorAddress: "0xdeE710bB6a3b652C35B5cB74E7bdb03EE1F641E6",
     defaultAsset: "0x33ad9e4bd16b69b5bfded37d8b5d9ff9aba014fb", // SBC on Radius Testnet (6 decimals)
