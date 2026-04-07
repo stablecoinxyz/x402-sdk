@@ -1,5 +1,11 @@
 # @stablecoin.xyz/x402
 
+## 0.5.0
+
+### Minor Changes
+
+- 1ac20d8: Renamed middleware to paywall, removed deprecated code
+
 ## 0.3.2
 
 ### Patch Changes
