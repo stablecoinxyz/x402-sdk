@@ -2,7 +2,7 @@
 
 Four examples to manually verify the SDK end-to-end:
 
-1. **express-server** — Express API gated with `x402Middleware` (Base + Radius + Solana)
+1. **express-server** — Express API gated with `paywall` (Base + Radius + Solana)
 2. **base-demo** — Base client (ERC-2612 Permit — no pre-approval needed)
 3. **radius-demo** — Radius client (ERC-2612 Permit — no pre-approval needed)
 4. **solana-demo** — Solana client (Ed25519 signature — requires one-time delegate approval)
