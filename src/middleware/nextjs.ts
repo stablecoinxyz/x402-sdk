@@ -1,11 +1,12 @@
 /**
- * withX402 — Next.js App Router wrapper for x402-gated route handlers.
+ * paywall — Next.js App Router wrapper for x402 payment-gated route handlers.
  *
- * Usage (single network):
- *   export const GET = withX402({ payTo: '0x...', amount: '1000000', network: 'base' }, handler)
+ * Usage:
+ *   import { paywall } from '@stablecoin.xyz/x402/middleware/nextjs'
+ *   export const GET = paywall({ payTo: '0x...', amount: '1000', network: 'base-sepolia' }, handler)
  *
- * Usage (multi-network):
- *   export const GET = withX402([
+ * Multi-network:
+ *   export const GET = paywall([
  *     { payTo: '0x...', amount: '1000000000000000', network: 'base' },
  *     { payTo: '2mSj...', amount: '1000000', network: 'solana' },
  *   ], handler)
@@ -46,7 +47,7 @@ interface ResolvedEntry {
 /**
  * Wrap a Next.js App Router route handler behind x402 payment.
  */
-export function withX402(opts: WithX402Options | WithX402Options[], handler: NextRouteHandler): NextRouteHandler {
+export function paywall(opts: WithX402Options | WithX402Options[], handler: NextRouteHandler): NextRouteHandler {
   const optArray = Array.isArray(opts) ? opts : [opts];
 
   // Validate all networks upfront and build resolved entries
@@ -216,3 +217,6 @@ function fromBase64(str: string): string {
       .join("")
   );
 }
+
+/** @deprecated Use `paywall` instead. */
+export const withX402 = paywall;

@@ -58,6 +58,7 @@ export interface AuthorizationPayload {
     from: string;     // payer (owner)
     to: string;       // facilitator (spender)
     value: string;    // atomic units
+    validAfter: string; // earliest valid time ("0" for immediate)
     validBefore: number; // permit deadline, Unix timestamp
     nonce: string;    // ERC-2612 nonce, stringified bigint
   };
