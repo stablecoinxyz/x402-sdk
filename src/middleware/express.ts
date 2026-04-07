@@ -39,11 +39,20 @@ export interface X402MiddlewareOptions {
   fetchFn?: typeof fetch;
 }
 
+/** Payment result attached to req.x402 after successful payment */
+export interface X402PaymentResult {
+  payer: string;      // wallet address that paid
+  txHash?: string;    // on-chain transaction hash
+  amount: string;     // amount paid (raw units)
+  network: string;    // network settled on
+}
+
 // Minimal Express types to avoid a hard peer-dep import at module level
 type ExpressRequest = {
   headers: Record<string, string | string[] | undefined>;
   url: string;
   method: string;
+  x402?: X402PaymentResult;
 };
 type ExpressResponse = {
   status(code: number): ExpressResponse;
@@ -135,6 +144,30 @@ export function paywall(opts: X402MiddlewareOptions | X402MiddlewareOptions[]) {
       const message = err instanceof Error ? err.message : String(err);
       console.error("[x402] payment processing error:", message);
       return res.status(402).json({ error: `Payment processing failed: ${message}` });
+    }
+
+    // Attach payment metadata to req so handlers can access it
+    const inner = paymentPayload.payload as Record<string, any>;
+    const payer =
+      inner?.authorization?.from ||
+      inner?.from ||
+      "unknown";
+    req.x402 = {
+      payer,
+      txHash: (res as any).getHeader?.("PAYMENT-RESPONSE")
+        ? undefined // txHash is in the header, extract if needed
+        : undefined,
+      amount: opt.amount,
+      network: opt.network,
+    };
+
+    // Extract txHash from PAYMENT-RESPONSE header if set
+    const prHeader = (res as any).getHeader?.("PAYMENT-RESPONSE");
+    if (prHeader) {
+      try {
+        const decoded = JSON.parse(fromBase64(prHeader as string));
+        if (decoded.transaction) req.x402.txHash = decoded.transaction;
+      } catch {}
     }
 
     next();

@@ -166,7 +166,9 @@ describe("withX402 — valid payment → calls handler", () => {
     const originalReq = makeRequest({ "payment-signature": makePaymentHeader() });
     await handler(originalReq, { params: { id: "123" } });
 
-    expect(receivedRequest).toBe(originalReq);
+    expect(receivedRequest?.url).toBe(originalReq.url);
+    expect(receivedRequest?.headers.get("x-payment-payer")).toBeDefined();
+    expect(receivedRequest?.headers.get("x-payment-network")).toBe(NETWORK);
     expect(receivedContext).toEqual({ params: { id: "123" } });
   });
 });

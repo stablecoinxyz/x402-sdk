@@ -121,8 +121,35 @@ export function paywall(opts: WithX402Options | WithX402Options[], handler: Next
         }
       }
 
+      // Attach payment metadata as headers so the handler can read them
+      const inner = paymentPayload.payload as Record<string, any>;
+      const payer =
+        inner?.authorization?.from ||
+        inner?.from ||
+        "unknown";
+      const enrichedHeaders = new Headers(request.headers);
+      enrichedHeaders.set("x-payment-payer", payer);
+      enrichedHeaders.set("x-payment-network", opt.network);
+      enrichedHeaders.set("x-payment-amount", opt.amount);
+
+      const prValue = responseHeaders.get("PAYMENT-RESPONSE");
+      if (prValue) {
+        try {
+          const decoded = JSON.parse(fromBase64(prValue));
+          if (decoded.transaction) enrichedHeaders.set("x-payment-tx", decoded.transaction);
+        } catch {}
+      }
+
+      const enrichedRequest = new Request(request.url, {
+        method: request.method,
+        headers: enrichedHeaders,
+        body: request.body,
+        // @ts-expect-error duplex needed for streaming bodies
+        duplex: "half",
+      });
+
       // Call the original handler
-      const handlerResponse = await handler(request, context);
+      const handlerResponse = await handler(enrichedRequest, context);
 
       // Merge PAYMENT-RESPONSE header into the handler's response
       if (responseHeaders.has("PAYMENT-RESPONSE")) {
