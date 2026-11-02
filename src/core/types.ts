@@ -199,4 +199,10 @@ export interface EvmTokenInfo {
   name: string;
   /** EIP-712 domain version. */
   version: string;
+  /**
+   * The token's on-chain `decimals()`. The client's `maxAmount` cap converts USD to atomic
+   * units with this, never with the network-wide `decimals` (a network can carry tokens of
+   * different decimals: SBC 18 and USDC 6 on Base).
+   */
+  decimals: number;
 }

@@ -10,6 +10,7 @@ import type { SolanaSigner } from "./signer.js";
 import { signSolanaPayment } from "./signing.js";
 import { FacilitatorClient } from "../core/facilitator.js";
 import { SUPPORTED_NETWORKS, toCAIP2 } from "../core/networks.js";
+import { usdToAtomic } from "../core/amount.js";
 import { withRetry } from "../core/retry.js";
 import type {
   PaymentRequirement,
@@ -193,7 +194,11 @@ function selectRequirement(
   const supported = requirements.filter((r) => solanaNetworks.includes(r.network));
 
   let filtered = supported;
-  if (maxAmount) {
+  if (maxAmount !== undefined) {
+    // 9 is the mainnet SBC mint's decimals (DBAzBUXaLj1qANCseUPZz4sp9F8d2sc78C4vKjhbTGMA), and it is
+    // right whatever `asset` the seller names: the SBC facilitator's Solana verify and settle
+    // always move that mint (x402-facilitator src/solana/verify.ts, settle.ts use
+    // config.sbcTokenAddress). A non-SBC facilitatorUrl that moves another mint is not covered.
     filtered = supported.filter((r) => {
       const decimals = SUPPORTED_NETWORKS[r.network]?.decimals ?? 9;
       return BigInt(r.maxAmountRequired) <= usdToAtomic(maxAmount, decimals);
@@ -211,13 +216,6 @@ function selectRequirement(
   if (devnet) return devnet;
 
   return filtered.sort((a, b) => Number(BigInt(a.maxAmountRequired) - BigInt(b.maxAmountRequired)))[0];
-}
-
-function usdToAtomic(usdAmount: string, decimals: number): bigint {
-  const parts = usdAmount.split(".");
-  let fractional = parts[1] ?? "";
-  fractional = fractional.length > decimals ? fractional.slice(0, decimals) : fractional.padEnd(decimals, "0");
-  return BigInt((parts[0] + fractional).replace(/^0+(?=\d)/, "") || "0");
 }
 
 function extractTxHash(result: SettleResponse): string | undefined {

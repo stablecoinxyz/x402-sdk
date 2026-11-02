@@ -170,3 +170,22 @@ describe("createSolanaX402Client — receipt header", () => {
     expect(res.paymentResult?.txHash).toBe("fromheader");
   });
 });
+
+// The SBC facilitator always moves the 9-decimal SBC mint on Solana, so the cap converts with 9.
+// make402Body's default amount is 1000000 atomic = 0.001 SBC.
+describe("createSolanaX402Client — maxAmount cap", () => {
+  const client = () => createSolanaX402Client({ signer: TEST_SIGNER, facilitatorUrl: FACILITATOR_URL, fetchFn: makeSolanaFlowFetch({}) });
+
+  it("refuses an offer above the cap", async () => {
+    await expect(client().fetch(TARGET_URL, { maxAmount: "0.0005" })).rejects.toThrow(/No suitable Solana payment option/);
+  });
+
+  it("pays an offer at the cap", async () => {
+    const res = await client().fetch(TARGET_URL, { maxAmount: "0.001" });
+    expect(res.paymentResult?.success).toBe(true);
+  });
+
+  it("rejects a malformed cap instead of reading it as a number", async () => {
+    await expect(client().fetch(TARGET_URL, { maxAmount: "0x10" })).rejects.toThrow(/maxAmount must be a non-negative decimal string/);
+  });
+});

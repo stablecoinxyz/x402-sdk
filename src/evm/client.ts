@@ -9,6 +9,7 @@
 import type { EvmSigner } from "./signer.js";
 import { signPermit2Payment, getTokenBalance } from "./signing.js";
 import { SUPPORTED_NETWORKS } from "../core/networks.js";
+import { knownTokenDecimals, usdToAtomic } from "../core/amount.js";
 import { fromCAIP2 } from "../core/facilitator.js";
 import { InsufficientBalanceError } from "../core/errors.js";
 import { withRetry } from "../core/retry.js";
@@ -250,11 +251,15 @@ function selectRequirement(
   }
 
   const atomic = (r: PaymentRequirement) => BigInt(r.amount ?? r.maxAmountRequired);
+  const decimalsOf = (r: PaymentRequirement) => knownTokenDecimals(r.network, r.asset);
   let filtered = supported;
-  if (maxAmount) {
+  if (maxAmount !== undefined) {
+    // The cap is in USD, so it is converted with the decimals of the token actually being paid,
+    // never the network-wide default (Base carries SBC at 18 and USDC at 6). A token this SDK
+    // does not know cannot be priced in USD, so with a cap set it is refused.
     filtered = supported.filter(({ selected }) => {
-      const decimals = SUPPORTED_NETWORKS[selected.network]?.decimals ?? 6;
-      return atomic(selected) <= usdToAtomic(maxAmount, decimals);
+      const decimals = decimalsOf(selected);
+      return decimals !== undefined && atomic(selected) <= usdToAtomic(maxAmount, decimals);
     });
   }
 
@@ -269,16 +274,18 @@ function selectRequirement(
   const testnet = filtered.find(({ selected }) => selected.network.includes("sepolia") || selected.network.includes("testnet"));
   if (testnet) return testnet;
 
-  return filtered.sort((a, b) => Number(atomic(a.selected) - atomic(b.selected)))[0];
-}
-
-function usdToAtomic(usdAmount: string, decimals: number): bigint {
-  const parts = usdAmount.split(".");
-  let fractional = parts[1] ?? "";
-  fractional = fractional.length > decimals
-    ? fractional.slice(0, decimals)
-    : fractional.padEnd(decimals, "0");
-  return BigInt((parts[0] + fractional).replace(/^0+(?=\d)/, "") || "0");
+  // Cheapest in USD terms: atomic amounts of tokens with different decimals are not comparable,
+  // so scale known tokens to 18 decimals. Tokens this SDK does not know sort after known ones.
+  const usdScaled = (r: PaymentRequirement): bigint | undefined => {
+    const decimals = decimalsOf(r);
+    return decimals === undefined ? undefined : atomic(r) * 10n ** BigInt(Math.max(0, 18 - decimals));
+  };
+  return filtered.sort((a, b) => {
+    const x = usdScaled(a.selected);
+    const y = usdScaled(b.selected);
+    if (x === undefined || y === undefined) return (x === undefined ? 1 : 0) - (y === undefined ? 1 : 0);
+    return x < y ? -1 : x > y ? 1 : 0;
+  })[0];
 }
 
 function normalizeLocalhost(url: string): string {
