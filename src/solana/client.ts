@@ -134,8 +134,9 @@ export function createSolanaX402Client(options: SolanaX402ClientOptions): Solana
         network: selected.network,
       };
 
+      // Receipt header: PAYMENT-RESPONSE (x402 v2) or X-PAYMENT-RESPONSE (v1)
       const paymentResponseHeader =
-        paidResponse.headers.get("PAYMENT-RESPONSE") ?? paidResponse.headers.get("payment-response");
+        paidResponse.headers.get("PAYMENT-RESPONSE") ?? paidResponse.headers.get("X-PAYMENT-RESPONSE");
       if (paymentResponseHeader) {
         try {
           const decoded = fromBase64(paymentResponseHeader);

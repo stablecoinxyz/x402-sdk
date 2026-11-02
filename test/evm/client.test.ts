@@ -14,6 +14,13 @@ const TARGET_URL = "https://api.example.com/premium";
 const FACILITATOR_URL = "https://f.test";
 const RPC_URL = "https://rpc.test";
 
+/** A paywall >= 0.5 Permit2 offer (the only EVM shape the SBC facilitator settles). */
+const permit2Offer = {
+  network: "eip155:84532",
+  amount: "1000000",
+  extra: { assetTransferMethod: "permit2" as const, name: "Stable Coin", version: "1" },
+};
+
 // ---- Mock fetch dispatcher for the full payment flow ----
 // Client no longer calls verify/settle — server handles that.
 // The second API call returns the paid response (with optional PAYMENT-RESPONSE header).
@@ -41,7 +48,7 @@ function makeFlowFetch(opts: {
 
     if (url.startsWith(TARGET_URL)) {
       apiCallCount++;
-      if (apiCallCount === 1) return makeFetchResponse(402, make402Body({ network }));
+      if (apiCallCount === 1) return makeFetchResponse(402, make402Body({ ...permit2Offer, ...(network !== "base-sepolia" ? { network } : {}) }));
       const headers: Record<string, string> = {};
       if (paymentResponse) headers["PAYMENT-RESPONSE"] = paymentResponse;
       return makeFetchResponse(apiStatus, apiBody, Object.keys(headers).length ? headers : undefined);
@@ -51,6 +58,9 @@ function makeFlowFetch(opts: {
       const body = JSON.parse((init?.body as string) ?? "{}");
       if (body.method === "eth_call") {
         const callData: string = body.params[0]?.data ?? "";
+        // Permit2 allowance: enough, so the client signs only the Permit2 witness
+        if (callData.startsWith("0xdd62ed3e"))
+          return makeFetchResponse(200, { jsonrpc: "2.0", id: 1, result: abiEncodeUint256(10n ** 30n) });
         if (callData.startsWith("0x7ecebe00"))
           return makeFetchResponse(200, { jsonrpc: "2.0", id: 1, result: abiEncodeUint256(nonce) });
         if (callData.startsWith("0x70a08231"))
@@ -178,7 +188,7 @@ describe("createX402Client — full x402 payment flow", () => {
     expect(headers["X-PAYMENT"]).toBe(headers["PAYMENT-SIGNATURE"]);
   });
 
-  it("signer is called once, with EIP-712 Permit typed data for SBC network", async () => {
+  it("signer is called once, with the Permit2 witness typed data, when Permit2 is already approved", async () => {
     const signer = createMockSigner();
     const client = createX402Client({
       signer,
@@ -190,10 +200,11 @@ describe("createX402Client — full x402 payment flow", () => {
     await client.fetch(TARGET_URL);
 
     expect(signer.calls).toHaveLength(1);
-    expect(signer.calls[0].primaryType).toBe("Permit");
-    // verifyingContract is the token (not facilitator)
+    expect(signer.calls[0].primaryType).toBe("PermitWitnessTransferFrom");
+    // verifyingContract is the canonical Permit2 contract, and the domain has no version
     const domain = signer.calls[0].domain as Record<string, unknown>;
-    expect(domain.verifyingContract).toBe("0xf9FB20B8E097904f0aB7d12e9DbeE88f2dcd0F16");
+    expect(domain.verifyingContract).toBe("0x000000000022D473030F116dDEE9F6B43aC78BA3");
+    expect(domain).not.toHaveProperty("version");
   });
 
   it("parses PAYMENT-RESPONSE header from final response for txHash", async () => {
@@ -238,7 +249,7 @@ describe("createX402Client — payment flow error handling", () => {
       const url = typeof input === "string" ? input : (input as URL).href;
       if (url.startsWith(TARGET_URL)) {
         callCount++;
-        return makeFetchResponse(402, make402Body({})); // always 402
+        return makeFetchResponse(402, make402Body(permit2Offer)); // always 402
       }
       if (url === RPC_URL)
         return makeFetchResponse(200, { jsonrpc: "2.0", id: 1, result: abiEncodeUint256(0n) });
@@ -309,14 +320,14 @@ describe("createX402Client — PAYMENT-REQUIRED header parsing", () => {
       x402Version: 2,
       accepts: [{
         scheme: "exact" as const,
-        network: "base-sepolia",
+        network: "eip155:84532",
+        amount: "2500000",
         maxAmountRequired: "2500000", // different from body
         resource: TARGET_URL,
         payTo: "0xpayto000000000000000000000000000000000000",
         asset: "0xf9FB20B8E097904f0aB7d12e9DbeE88f2dcd0F16",
         maxTimeoutSeconds: 300,
-        facilitator: "0x124b082e8df36258198da4caa3b39c7dfa64d9ce",
-        extra: { name: "SBC" },
+        extra: { assetTransferMethod: "permit2" as const, name: "Stable Coin", version: "1" },
       }],
     };
     const headerValue = toBase64(JSON.stringify(headerRequirements));
