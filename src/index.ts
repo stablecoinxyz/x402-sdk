@@ -30,6 +30,8 @@ export type {
   SettleResponse,
   AuthorizationPayload,
   SolanaPaymentPayload,
+  Permit2Payload,
+  Eip2612GasSponsoring,
   SuiPaymentPayload,
   Eip3009Payload,
   TransferAuthorization,

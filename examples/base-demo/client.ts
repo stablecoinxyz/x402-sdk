@@ -2,7 +2,7 @@
  * x402 Base client example
  *
  * Calls an x402-gated endpoint using the @stablecoin.xyz/x402 SDK.
- * Signs ERC-2612 Permit payments with a viem WalletClient on Base mainnet.
+ * Signs x402 Permit2 payments with a viem WalletClient on Base mainnet.
  *
  * Usage:
  *   PRIVATE_KEY=0x... npx tsx client.ts [url]

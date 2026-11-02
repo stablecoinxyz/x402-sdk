@@ -7,9 +7,8 @@
  */
 
 import type { EvmSigner } from "./signer.js";
-import { signPermit, signTransferAuthorization, getTokenBalance } from "./signing.js";
-import { FacilitatorClient } from "../core/facilitator.js";
-import { SUPPORTED_NETWORKS, toCAIP2 } from "../core/networks.js";
+import { signPermit2Payment, getTokenBalance } from "./signing.js";
+import { SUPPORTED_NETWORKS } from "../core/networks.js";
 import { fromCAIP2 } from "../core/facilitator.js";
 import { InsufficientBalanceError } from "../core/errors.js";
 import { withRetry } from "../core/retry.js";
@@ -26,9 +25,9 @@ export interface X402ClientOptions {
   signer: EvmSigner;
   /** Network to use for payments (e.g. 'base', 'base-sepolia'). */
   network?: string;
-  /** Override the facilitator URL. Defaults to network config. */
+  /** @deprecated Unused: the seller talks to the facilitator, the client never does. */
   facilitatorUrl?: string;
-  /** Override the RPC URL (for raw eth_call). Defaults to network config. */
+  /** Override the RPC URL (balance, Permit2 allowance and token nonce reads). Defaults to network config. */
   rpcUrl?: string;
   /** Skip balance check before signing (faster, saves an RPC round-trip). Default: false. */
   skipBalanceCheck?: boolean;
@@ -53,9 +52,8 @@ export interface X402Client {
 }
 
 export function createX402Client(options: X402ClientOptions): X402Client {
-  const { signer, network, facilitatorUrl, rpcUrl, skipBalanceCheck = false, fetchFn } = options;
+  const { signer, network, rpcUrl, skipBalanceCheck = false, fetchFn } = options;
   const fetchImpl = fetchFn ?? (globalThis.fetch as typeof fetch);
-  const facilitator = new FacilitatorClient({ facilitatorUrl, fetchFn: fetchImpl });
 
   return {
     async fetch(url, requestOptions = {}) {
@@ -80,13 +78,16 @@ export function createX402Client(options: X402ClientOptions): X402Client {
       // Step 2: Parse requirements
       const bodyText = await initialResponse.text();
       const requirements = parsePaymentRequirements(bodyText, initialResponse.headers, normalizedUrl);
-      const selected = selectRequirement(requirements, preferredNetwork ?? network, maxAmount);
+      const choice = selectRequirement(requirements, preferredNetwork ?? network, maxAmount);
 
-      if (!selected) {
+      if (!choice) {
         throw new Error(
           `No suitable payment option found for networks: ${requirements.map((r) => r.network).join(", ")}`
         );
       }
+      // `selected` is keyed by the friendly network name; `offer` is the seller's entry as sent.
+      const { selected, offer } = choice;
+      const amount = selected.amount ?? selected.maxAmountRequired;
 
       // Step 3: Optional balance check
       if (!skipBalanceCheck) {
@@ -94,16 +95,14 @@ export function createX402Client(options: X402ClientOptions): X402Client {
         if (networkConfig?.rpcUrl || rpcUrl) {
           const rpcEndpoint = rpcUrl ?? networkConfig.rpcUrl;
           const balance = await getTokenBalance(rpcEndpoint, selected.asset, signer.address, fetchImpl);
-          if (balance < BigInt(selected.maxAmountRequired)) {
-            throw new InsufficientBalanceError(balance.toString(), selected.maxAmountRequired);
+          if (balance < BigInt(amount)) {
+            throw new InsufficientBalanceError(balance.toString(), amount);
           }
         }
       }
 
-      // Step 4: Discover facilitator signer, then sign payment payload
-      const caip2 = toCAIP2(selected.network);
-      const facilitatorSigner = await facilitator.getSignerForNetwork(caip2);
-      const paymentPayload = await buildPaymentPayload(signer, selected, rpcUrl, fetchImpl, facilitatorSigner);
+      // Step 4: Sign the Permit2 payment for the offer as the seller sent it
+      const paymentPayload = await buildPaymentPayload(signer, selected.network, offer, normalizedUrl, rpcUrl, fetchImpl);
 
       // Step 5: Re-fetch with payment header — server handles verify+settle
       const paymentHeader = toBase64(JSON.stringify(paymentPayload));
@@ -130,9 +129,18 @@ export function createX402Client(options: X402ClientOptions): X402Client {
       const paymentResult: PaymentResult = {
         success: paidResponse.ok,
         txHash: undefined as string | undefined,
-        amountPaid: selected.maxAmountRequired,
+        amountPaid: amount,
         network: selected.network,
       };
+
+      // 202: the seller's facilitator broadcast the payment and does not know the outcome yet
+      // (paywall >= 0.5.1). Not a success; the txHash is what to reconcile, not a reason to pay again.
+      if (paidResponse.status === 202) {
+        paymentResult.success = false;
+        paymentResult.pending = true;
+        const body = await paidResponse.clone().json().catch(() => undefined) as { payment?: { txHash?: string } } | undefined;
+        if (body?.payment?.txHash) paymentResult.txHash = body.payment.txHash;
+      }
 
       // Parse PAYMENT-RESPONSE header if present
       const paymentResponseHeader = paidResponse.headers.get("PAYMENT-RESPONSE") || paidResponse.headers.get("payment-response");
@@ -156,63 +164,28 @@ export function createX402Client(options: X402ClientOptions): X402Client {
 
 async function buildPaymentPayload(
   signer: EvmSigner,
-  requirement: PaymentRequirement,
+  network: string,
+  offer: PaymentRequirement,
+  resource: string,
   rpcUrlOverride?: string,
-  fetchFn?: typeof fetch,
-  /** Actual facilitator EOA (from /supported). Falls back to requirement.facilitator. */
-  facilitatorSignerAddress?: string
+  fetchFn?: typeof fetch
 ): Promise<PaymentPayload> {
-  const isSbcNetwork =
-    requirement.network === "base" ||
-    requirement.network === "base-sepolia" ||
-    requirement.network === "radius" ||
-    requirement.network === "radius-testnet";
-
-  const networkConfig = SUPPORTED_NETWORKS[requirement.network];
-  // Use discovered EOA first, then requirement hint, then static config fallback
-  const facilitatorAddress =
-    facilitatorSignerAddress ??
-    requirement.facilitator ??
-    networkConfig?.facilitatorAddress ??
-    "0x124b082e8df36258198da4caa3b39c7dfa64d9ce";
-
-  if (isSbcNetwork) {
-    // ERC-2612 Permit — gasless, no pre-approval needed
-    const tokenName = requirement.extra?.name ?? "SBC";
-    const { payload } = await signPermit(signer, {
-      network: requirement.network,
-      spender: facilitatorAddress,
-      value: requirement.maxAmountRequired,
-      tokenAddress: requirement.asset,
-      tokenName,
-      validForSeconds: requirement.maxTimeoutSeconds,
-      rpcUrlOverride,
-      fetchFn,
-    });
-
-    return {
-      accepted: { network: toCAIP2(requirement.network), scheme: requirement.scheme },
-      payload,
-    };
-  }
-
-  // EIP-3009 TransferWithAuthorization (for USDC etc.)
-  const tokenName = requirement.extra?.name ?? "USD Coin";
-  const tokenVersion = requirement.extra?.version ?? "2";
-
-  const { payload } = await signTransferAuthorization(signer, {
-    network: requirement.network,
-    to: requirement.payTo,
-    value: requirement.maxAmountRequired,
-    assetAddress: requirement.asset,
-    tokenName,
-    tokenVersion,
-    validForSeconds: requirement.maxTimeoutSeconds,
-  });
-
+  const { payload, extensions } = await signPermit2Payment(signer, { network, offer, rpcUrlOverride, fetchFn });
   return {
-    accepted: { network: toCAIP2(requirement.network), scheme: requirement.scheme },
+    x402Version: 2,
+    resource,
+    // Echo the offer exactly: the seller matches the payment to an offer by these fields and
+    // the facilitator refuses a payment whose echo differs from the requirements.
+    accepted: {
+      scheme: offer.scheme,
+      network: offer.network,
+      amount: offer.amount ?? offer.maxAmountRequired,
+      asset: offer.asset,
+      payTo: offer.payTo,
+      extra: offer.extra,
+    },
     payload,
+    ...(extensions ? { extensions } : {}),
   };
 }
 
@@ -259,34 +232,44 @@ function selectRequirement(
   requirements: PaymentRequirement[],
   preferredNetwork?: string,
   maxAmount?: string
-): PaymentRequirement | null {
+): { selected: PaymentRequirement; offer: PaymentRequirement } | null {
   // EVM offers only, keyed by friendly network name: paywall >= 0.5 advertises CAIP-2
   // ("eip155:8453"), older sellers the friendly name. Solana offers are never this client's.
-  const supported = requirements
-    .map((r) => ({ ...r, network: SUPPORTED_NETWORKS[r.network] ? r.network : fromCAIP2(r.network) }))
-    .filter((r) => (SUPPORTED_NETWORKS[r.network]?.chainId ?? 0) > 0);
+  const evm = requirements
+    .map((offer) => ({ offer, selected: { ...offer, network: SUPPORTED_NETWORKS[offer.network] ? offer.network : fromCAIP2(offer.network) } }))
+    .filter(({ selected }) => (SUPPORTED_NETWORKS[selected.network]?.chainId ?? 0) > 0);
 
+  // The SBC facilitator settles only Permit2 on EVM. A seller advertising only the legacy
+  // ERC-2612 shape (paywall < 0.5) cannot be paid; say so instead of signing something unsettleable.
+  const supported = evm.filter(({ offer }) => offer.extra?.assetTransferMethod === "permit2");
+  if (evm.length > 0 && supported.length === 0) {
+    throw new Error(
+      "x402: the seller offers no Permit2 payment option (extra.assetTransferMethod \"permit2\"). " +
+      "It likely runs paywall < 0.5; the SBC facilitator settles only Permit2 on EVM."
+    );
+  }
+
+  const atomic = (r: PaymentRequirement) => BigInt(r.amount ?? r.maxAmountRequired);
   let filtered = supported;
   if (maxAmount) {
-    filtered = supported.filter((r) => {
-      const decimals = SUPPORTED_NETWORKS[r.network]?.decimals ?? 6;
-      return BigInt(r.amount ?? r.maxAmountRequired) <= usdToAtomic(maxAmount, decimals);
+    filtered = supported.filter(({ selected }) => {
+      const decimals = SUPPORTED_NETWORKS[selected.network]?.decimals ?? 6;
+      return atomic(selected) <= usdToAtomic(maxAmount, decimals);
     });
   }
 
   if (filtered.length === 0) return null;
 
   if (preferredNetwork) {
-    const preferred = filtered.find((r) => r.network === preferredNetwork);
+    const preferred = filtered.find(({ selected }) => selected.network === preferredNetwork);
     if (preferred) return preferred;
   }
 
   // Prefer testnet for safety, then cheapest
-  const testnet = filtered.find((r) => r.network.includes("sepolia") || r.network.includes("testnet"));
+  const testnet = filtered.find(({ selected }) => selected.network.includes("sepolia") || selected.network.includes("testnet"));
   if (testnet) return testnet;
 
-  const atomic = (r: PaymentRequirement) => BigInt(r.amount ?? r.maxAmountRequired);
-  return filtered.sort((a, b) => Number(atomic(a) - atomic(b)))[0];
+  return filtered.sort((a, b) => Number(atomic(a.selected) - atomic(b.selected)))[0];
 }
 
 function usdToAtomic(usdAmount: string, decimals: number): bigint {

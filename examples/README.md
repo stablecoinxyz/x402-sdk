@@ -3,8 +3,8 @@
 Four examples to manually verify the SDK end-to-end:
 
 1. **express-server** — Express API gated with `paywall` (Base + Radius + Solana)
-2. **base-demo** — Base client (ERC-2612 Permit — no pre-approval needed)
-3. **radius-demo** — Radius client (ERC-2612 Permit — no pre-approval needed)
+2. **base-demo** — Base client (Permit2 — no on-chain approval needed)
+3. **radius-demo** — Radius client (Permit2 — no on-chain approval needed)
 4. **solana-demo** — Solana client (Ed25519 signature — requires one-time delegate approval)
 
 ---
@@ -40,7 +40,7 @@ pnpm install
 pnpm start
 ```
 
-No setup beyond a funded wallet. ERC-2612 Permit is signed off-chain — no on-chain approval transaction needed.
+No setup beyond a funded wallet. The Permit2 payment, and an ERC-2612 permit approving Permit2 for the amount, are signed off-chain — no on-chain approval transaction needed. The seller must run paywall >= 0.5.
 
 **Requirements:**
 - Wallet holds SBC on Base mainnet (`0xfdcC3dd6671eaB0709A4C0f3F53De9a333d80798`, 18 decimals)
@@ -57,7 +57,7 @@ pnpm install
 pnpm start
 ```
 
-Same Permit-based flow as Base — no on-chain approval needed.
+Same Permit2 flow as Base — no on-chain approval needed.
 
 **Requirements:**
 - Wallet holds SBC on Radius (chain ID 723487)
@@ -80,7 +80,7 @@ pnpm install
 pnpm approve
 ```
 
-This runs a single `approve` transaction that authorizes the x402 facilitator to transfer SBC tokens on your behalf. Required because SPL Token transfers need pre-delegation (unlike EVM's off-chain Permit). Only needed once per wallet.
+This runs a single `approve` transaction that authorizes the x402 facilitator to transfer SBC tokens on your behalf. Required because SPL Token transfers need pre-delegation (unlike EVM's off-chain Permit2 signatures). Only needed once per wallet.
 
 Then:
 

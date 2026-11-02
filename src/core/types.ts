@@ -75,7 +75,33 @@ export interface SuiPaymentPayload {
   signature: string;   // base64 Sui signature over them
 }
 
+/** x402 v2 Exact EVM Permit2 payload: a PermitWitnessTransferFrom to the x402 proxy. */
+export interface Permit2Payload {
+  signature: string; // 65-byte EOA signature
+  permit2Authorization: {
+    permitted: { token: string; amount: string };
+    from: string;
+    spender: string; // x402 Permit2 proxy
+    nonce: string; // decimal
+    deadline: string; // decimal Unix seconds
+    witness: { to: string; validAfter: string };
+  };
+}
+
+/** ERC-2612 permit granting Permit2 the payment amount, sent as an x402 extension. */
+export interface Eip2612GasSponsoring {
+  from: string;
+  asset: string;
+  spender: string; // Permit2
+  amount: string;
+  nonce: string;
+  deadline: string;
+  signature: string;
+  version: string; // extension version, "1"
+}
+
 export type PaymentPayloadInner =
+  | Permit2Payload
   | Eip3009Payload
   | AuthorizationPayload
   | SolanaPaymentPayload
@@ -86,6 +112,11 @@ export type PaymentPayloadInner =
  * `accepted.network` uses CAIP-2 format: "eip155:8453", "solana:mainnet-beta", etc.
  */
 export interface PaymentPayload {
+  x402Version?: number;
+  /** URL the payment is for. */
+  resource?: string;
+  /** x402 extensions, e.g. `eip2612GasSponsoring` on EVM. */
+  extensions?: Record<string, unknown>;
   accepted: {
     network: string; // CAIP-2
     scheme: string;  // "exact"
@@ -134,6 +165,8 @@ export interface PaymentResponse {
 
 export interface PaymentResult {
   success: boolean;
+  /** The seller answered 202: the payment was broadcast and its outcome is not yet known. */
+  pending?: boolean;
   responseBody?: unknown;
   responseHeaders?: Record<string, string>;
   txHash?: string;

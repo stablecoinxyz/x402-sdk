@@ -14,7 +14,7 @@ SDK for the [x402 HTTP payment protocol](https://x402.org) — gate your API beh
 4. Server verifies + settles via the facilitator — tokens flow payer → merchant
 5. Server returns the gated content
 
-The facilitator never holds funds. EVM uses ERC-2612 Permit (no pre-approval). Solana uses Ed25519 delegation (one-time `approve` required — [see below](#solana-payments)). Sui sellers are paid in native USDC: the payer signs a gasless transfer and the facilitator submits it ([see below](#sui-payments)).
+The facilitator never holds funds. EVM uses Permit2: the payer signs a Permit2 transfer bound to the recipient, plus an ERC-2612 permit approving Permit2 for exactly that amount when it is not already approved, so no on-chain approval is needed. EOA signers only; the facilitator rejects smart-account (ERC-1271) signatures. Solana uses Ed25519 delegation (one-time `approve` required — [see below](#solana-payments)). Sui sellers are paid in native USDC: the payer signs a gasless transfer and the facilitator submits it ([see below](#sui-payments)).
 
 ---
 
@@ -231,8 +231,8 @@ await approve(connection, payer, tokenAccount, FACILITATOR, payer, BigInt(1_000 
 |--------|------|---------|-------------|
 | `signer` | `EvmSigner` | required | `viemSignerAdapter(wc)` or `ethersSignerAdapter(s)` |
 | `network` | `string` | auto | Preferred network — auto-selected from 402 response if omitted |
-| `facilitatorUrl` | `string` | hosted | Override the facilitator endpoint |
-| `rpcUrl` | `string` | network default | Override RPC for balance/nonce checks |
+| `facilitatorUrl` | `string` | — | Deprecated, unused: the seller talks to the facilitator |
+| `rpcUrl` | `string` | network default | Override RPC for balance, Permit2 allowance and token nonce reads |
 | `skipBalanceCheck` | `boolean` | `false` | Skip pre-flight balance check |
 
 ### `client.fetch(url, init?)`
@@ -242,12 +242,15 @@ Drop-in for `fetch`. Returns `Response & { paymentResult? }`.
 ```typescript
 type PaymentResult = {
   success: boolean
+  pending?: boolean   // seller answered 202: broadcast, outcome not yet known. Reconcile txHash; do not pay again
   txHash?: string
   amountPaid?: string
   network?: string
   error?: string
 }
 ```
+
+The client pays only Permit2 offers (`extra.assetTransferMethod: "permit2"`, from paywall >= 0.5). An EVM 402 without one throws, since the SBC facilitator settles nothing else on EVM. The permit window is the seller's `maxTimeoutSeconds`, clamped to 30–600 seconds.
 
 ### `paywall(options | options[])` — `/middleware/express`
 ### `paywall(options | options[], handler)` — `/middleware/nextjs`

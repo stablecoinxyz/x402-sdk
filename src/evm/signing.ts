@@ -3,6 +3,9 @@
  *
  * - Fetches ERC-2612 permit nonce via raw eth_call (no viem PublicClient needed).
  * - Constructs and signs EIP-712 Permit, SBC Payment, and EIP-3009 payloads.
+ * - signPermit2Payment builds the x402 v2 Exact EVM Permit2 payload, the only EVM payload
+ *   the SBC facilitator settles. signPermit / signTransferAuthorization are the legacy
+ *   ERC-2612 / EIP-3009 payloads, kept exported for callers but no longer used by the client.
  */
 
 import type { EvmSigner } from "./signer.js";
@@ -10,6 +13,9 @@ import type {
   AuthorizationPayload,
   TransferAuthorization,
   Eip3009Payload,
+  PaymentRequirement,
+  Permit2Payload,
+  Eip2612GasSponsoring,
 } from "../core/types.js";
 import { getNetworkConfig } from "../core/networks.js";
 import { SigningError, NetworkError } from "../core/errors.js";
@@ -38,7 +44,171 @@ const TRANSFER_WITH_AUTHORIZATION_TYPES = {
   ],
 };
 
+// ---- Permit2 (x402 v2 Exact EVM) ----
+// Copied from x402-facilitator src/evm/permit2.ts, which verifies these signatures.
+
+/** Canonical Uniswap Permit2 deployment. */
+export const PERMIT2_ADDRESS = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
+/** x402 Permit2 proxy: the Permit2 spender, which enforces the signed witness recipient. */
+export const X402_PERMIT2_PROXY = "0x402085c248EeA27D92E8b30b2C58ed07f9E20001";
+
+const PERMIT2_WITNESS_TYPES = {
+  PermitWitnessTransferFrom: [
+    { name: "permitted", type: "TokenPermissions" },
+    { name: "spender", type: "address" },
+    { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+    { name: "witness", type: "Witness" },
+  ],
+  TokenPermissions: [
+    { name: "token", type: "address" },
+    { name: "amount", type: "uint256" },
+  ],
+  Witness: [
+    { name: "to", type: "address" },
+    { name: "validAfter", type: "uint256" },
+  ],
+};
+
+/** Bounds on the permit window a seller may ask for (same as the SBC agent platform's payer). */
+const MIN_PERMIT_SECONDS = 30;
+const MAX_PERMIT_SECONDS = 600;
+
+export interface SignPermit2Result {
+  payload: Permit2Payload;
+  /** Present when the payer's Permit2 allowance is below the amount; see signPermit2Payment. */
+  extensions?: { eip2612GasSponsoring: { info: Eip2612GasSponsoring } };
+}
+
+/**
+ * Sign the x402 v2 Exact EVM Permit2 payment for one `permit2` offer.
+ *
+ * The payment is a Permit2 `PermitWitnessTransferFrom` to the x402 proxy whose witness binds
+ * `payTo`. Permit2 can only move the token if the payer has approved it. When the current
+ * allowance (read on chain) is below the amount, an ERC-2612 permit granting Permit2 exactly
+ * the amount is added as the `eip2612GasSponsoring` extension, so the payer needs no prior
+ * on-chain approval. It is left out when the allowance already covers the amount, because an
+ * ERC-2612 permit SETS the allowance: it would overwrite a standing Permit2 approval the
+ * payer uses elsewhere.
+ *
+ * Signatures must be 65-byte EOA signatures; the facilitator rejects longer ERC-1271 ones.
+ */
+export async function signPermit2Payment(
+  signer: EvmSigner,
+  params: {
+    network: string; // friendly name, e.g. "base-sepolia"
+    offer: PaymentRequirement;
+    rpcUrlOverride?: string;
+    fetchFn?: typeof fetch;
+  }
+): Promise<SignPermit2Result> {
+  const { network, offer, fetchFn } = params;
+  const config = getNetworkConfig(network);
+  const rpcUrl = params.rpcUrlOverride ?? config.rpcUrl;
+  const amount = offer.amount ?? offer.maxAmountRequired;
+  if (!/^[1-9]\d*$/.test(amount)) throw new SigningError(`Offer amount must be a positive integer, got "${amount}"`);
+
+  const requested = Number(offer.maxTimeoutSeconds);
+  const windowSeconds = Number.isFinite(requested)
+    ? Math.min(Math.max(Math.floor(requested), MIN_PERMIT_SECONDS), MAX_PERMIT_SECONDS)
+    : MAX_PERMIT_SECONDS;
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + windowSeconds);
+  const nonce = BigInt(randomHex32()); // Permit2 nonces are unordered: any unused 256-bit value
+
+  const signature = await signer.signTypedData({
+    domain: { name: "Permit2", chainId: config.chainId, verifyingContract: PERMIT2_ADDRESS },
+    types: PERMIT2_WITNESS_TYPES,
+    primaryType: "PermitWitnessTransferFrom",
+    message: {
+      permitted: { token: offer.asset, amount: BigInt(amount) },
+      spender: X402_PERMIT2_PROXY,
+      nonce,
+      deadline,
+      witness: { to: offer.payTo, validAfter: 0n },
+    },
+  });
+
+  const payload: Permit2Payload = {
+    signature,
+    permit2Authorization: {
+      permitted: { token: offer.asset, amount },
+      from: signer.address,
+      spender: X402_PERMIT2_PROXY,
+      nonce: nonce.toString(),
+      deadline: deadline.toString(),
+      witness: { to: offer.payTo, validAfter: "0" },
+    },
+  };
+
+  if (!rpcUrl) {
+    throw new NetworkError(network, `No RPC URL configured for network "${network}". Pass rpcUrl.`);
+  }
+  const allowance = await readUint256(rpcUrl, offer.asset, `0xdd62ed3e${pad32(signer.address)}${pad32(PERMIT2_ADDRESS)}`, "Get Permit2 allowance", fetchFn);
+  if (allowance >= BigInt(amount)) return { payload };
+
+  const tokenName = offer.extra?.name;
+  const tokenVersion = offer.extra?.version;
+  if (!tokenName || !tokenVersion) {
+    throw new SigningError("Offer has no EIP-712 name/version, so Permit2 cannot be approved by signature; approve Permit2 on chain first");
+  }
+  const tokenNonce = await getPermitNonce(rpcUrl, offer.asset, signer.address, fetchFn);
+  const sponsorSignature = await signer.signTypedData({
+    domain: { name: tokenName, version: tokenVersion, chainId: config.chainId, verifyingContract: offer.asset },
+    types: PERMIT_TYPES,
+    primaryType: "Permit",
+    message: { owner: signer.address, spender: PERMIT2_ADDRESS, value: BigInt(amount), nonce: tokenNonce, deadline },
+  });
+
+  return {
+    payload,
+    extensions: {
+      eip2612GasSponsoring: {
+        info: {
+          from: signer.address,
+          asset: offer.asset,
+          spender: PERMIT2_ADDRESS,
+          amount,
+          nonce: tokenNonce.toString(),
+          deadline: deadline.toString(),
+          signature: sponsorSignature,
+          version: "1", // the extension's version, not the token's
+        },
+      },
+    },
+  };
+}
+
 // ---- Raw RPC helpers ----
+
+function pad32(address: string): string {
+  return address.toLowerCase().replace("0x", "").padStart(64, "0");
+}
+
+/** eth_call returning one uint256. */
+async function readUint256(
+  rpcUrl: string,
+  to: string,
+  data: string,
+  operation: string,
+  fetchFn: typeof fetch = globalThis.fetch as typeof fetch
+): Promise<bigint> {
+  return withRetry(
+    async () => {
+      const response = await fetchFn(rpcUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to, data }, "latest"] }),
+      });
+      if (!response.ok) throw new Error(`RPC request failed: ${response.status}`);
+      const json = (await response.json()) as { result?: string; error?: { message: string } };
+      if (json.error) throw new SigningError(`${operation} failed: ${json.error.message}`);
+      const result = json.result ?? "0x0";
+      return BigInt(result === "0x" ? "0x0" : result);
+    },
+    operation,
+    { maxAttempts: 3 }
+  );
+}
 
 /**
  * Fetch ERC-2612 permit nonce via raw eth_call.
