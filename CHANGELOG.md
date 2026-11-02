@@ -1,5 +1,15 @@
 # @stablecoin.xyz/x402
 
+## 0.5.0
+
+### Minor Changes
+
+- d02e576: `paywall` (Express and Next.js) now advertises EVM payment requirements in the x402 v2 Permit2 shape the SBC facilitator accepts: CAIP-2 `network`, `amount`, and `extra: { assetTransferMethod: "permit2", name, version }`, without the ERC-2612 `facilitator` spender. 0.4.1 offers could not be paid by Permit2 buyers. EVM `payTo`, `amount` and `asset` are validated when `paywall()` is called, and an unlisted EVM token needs the new `tokenName` / `tokenVersion` options. The handler's payer now comes from the facilitator's verify response. Solana offers are unchanged. A payment is matched to its offer by network, asset, `payTo` and amount, so several offers on one network work; an EVM payment whose echoed offer differs from the route's is refused locally without a facilitator call. `settle: false` (verify-only) now throws on EVM networks: the facilitator's verify does not consume the Permit2 nonce, so one signed payment would be served without limit. A failed settlement that reports a transaction (`settlement_pending`, `duplicate_settlement`) returns it in the 402 body as `transaction` with `errorReason`, so buyers can check it instead of paying again. Next.js: buyer-sent `x-payment-*` headers are dropped before the handler runs, and a handler error after settlement is no longer turned into a 402. The EVM client now reads CAIP-2 offers and never picks a Solana offer, but it still signs ERC-2612, which the facilitator no longer settles; moving it to Permit2 is separate work.
+
+  Upgrading from 0.4.1: `paywall()` now throws at startup for `settle: false` on EVM, an EVM `payTo` that is not a non-zero 20-byte hex address, an `amount` that is not a positive integer string, an unlisted EVM `asset` without `tokenName`/`tokenVersion`, and token options on a Solana entry. The 402 `network` is now CAIP-2, while `req.x402.network`, the `x-payment-network` header and `PAYMENT-RESPONSE.network` keep the friendly name. EVM offers no longer carry `facilitator`. The handler's payer now comes from the facilitator.
+
+- 68e4b0b: `paywall` (Express and Next.js) accepts Sui: `network: "sui"` or `"sui-testnet"`, priced in native USDC (6 decimals). The 402 offer uses CAIP-2 `network` (`sui:mainnet` / `sui:testnet`), `amount` and `extra: {}`, the shape the SBC facilitator settles. A Sui `payTo` must be a full address (`0x` + 64 hex) and `amount` a positive integer, checked when `paywall()` is called; `settle: false` is refused on Sui, and a Sui payment is matched to the offer whose asset, `payTo` and amount it echoes. Once a Sui transaction may have been broadcast the middleware no longer answers 402: `settlement_pending` returns 202 with the digest, `duplicate_settlement` returns 409 with the digest, a failed settle call returns 504 (a Sui settle is never retried), and a retry whose transaction already executed returns 409 instead of 402; the handler does not run in any of these. EVM and Solana offers are unchanged. There is no Sui buyer client.
+
 ## 0.4.0
 
 ### Minor Changes
