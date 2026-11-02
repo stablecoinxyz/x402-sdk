@@ -142,8 +142,8 @@ export function createX402Client(options: X402ClientOptions): X402Client {
         if (body?.payment?.txHash) paymentResult.txHash = body.payment.txHash;
       }
 
-      // Parse PAYMENT-RESPONSE header if present
-      const paymentResponseHeader = paidResponse.headers.get("PAYMENT-RESPONSE") || paidResponse.headers.get("payment-response");
+      // Parse the receipt header if present: PAYMENT-RESPONSE (x402 v2) or X-PAYMENT-RESPONSE (v1)
+      const paymentResponseHeader = paidResponse.headers.get("PAYMENT-RESPONSE") ?? paidResponse.headers.get("X-PAYMENT-RESPONSE");
       if (paymentResponseHeader) {
         try {
           const decoded = fromBase64(paymentResponseHeader);

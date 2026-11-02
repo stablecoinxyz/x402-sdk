@@ -201,3 +201,13 @@ describe("EVM client signs the Permit2 payload the facilitator settles", () => {
     expect(res.paymentResult).toMatchObject({ success: false, pending: true, txHash: tx });
   });
 });
+
+describe("EVM client reads the seller's receipt under either header name", () => {
+  it("takes the txHash from an x402 v1 X-PAYMENT-RESPONSE header", async () => {
+    const tx = "0x" + "cd".repeat(32);
+    const receipt = toBase64(JSON.stringify({ success: true, transaction: tx }));
+    const f = flow([offer()], { paid: { status: 200, body: { ok: true }, headers: { "X-PAYMENT-RESPONSE": receipt } } });
+    const res = await createX402Client({ signer: createMockSigner(), rpcUrl: RPC, fetchFn: f.fetchFn }).fetch(TARGET);
+    expect(res.paymentResult?.txHash).toBe(tx);
+  });
+});

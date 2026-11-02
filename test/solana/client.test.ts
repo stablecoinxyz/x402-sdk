@@ -148,3 +148,25 @@ describe("createSolanaX402Client — full payment flow", () => {
     await expect(client.fetch(TARGET_URL)).rejects.toThrow("Insufficient balance");
   });
 });
+
+describe("createSolanaX402Client — receipt header", () => {
+  it("takes the transaction from an x402 v1 X-PAYMENT-RESPONSE header", async () => {
+    let apiCallCount = 0;
+    const receipt = Buffer.from(JSON.stringify({ success: true, transaction: "fromheader" })).toString("base64");
+    const fetchFn = vi.fn(async (input: RequestInfo | URL) => {
+      const url = getUrl([input]);
+      if (url.startsWith(TARGET_URL)) {
+        apiCallCount++;
+        if (apiCallCount === 1)
+          return makeFetchResponse(402, make402Body({ network: "solana", asset: bs58.encode(new Uint8Array(32).fill(10)) }));
+        return makeFetchResponse(200, { ok: true }, { "X-PAYMENT-RESPONSE": receipt });
+      }
+      if (url.endsWith("/verify")) return makeFetchResponse(200, { isValid: true });
+      if (url.endsWith("/settle")) return makeFetchResponse(200, { success: true, txHash: "fromsettle" });
+      throw new Error(`Unexpected fetch to: ${url}`);
+    });
+    const client = createSolanaX402Client({ signer: TEST_SIGNER, facilitatorUrl: FACILITATOR_URL, fetchFn });
+    const res = await client.fetch(TARGET_URL);
+    expect(res.paymentResult?.txHash).toBe("fromheader");
+  });
+});
