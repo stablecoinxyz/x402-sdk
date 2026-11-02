@@ -1,5 +1,11 @@
 # @stablecoin.xyz/x402
 
+## 0.6.0
+
+### Minor Changes
+
+- 1da27c2: The EVM buyer client (`createX402Client`, and `useX402` through it) now pays with x402 v2 Permit2, the only EVM payload the SBC facilitator settles; it signed ERC-2612 before and could not pay anyone. It signs a Permit2 `PermitWitnessTransferFrom` to the x402 proxy bound to the seller's `payTo`, and, when the payer's Permit2 allowance is below the amount, an ERC-2612 permit approving Permit2 for exactly that amount (sent as the `eip2612GasSponsoring` extension), so no on-chain approval is needed. A standing Permit2 approval is left untouched. The payment echoes the seller's offer in `accepted`. Breaking: an EVM 402 with no `assetTransferMethod: "permit2"` offer (paywall < 0.5) now throws. The seller's `maxTimeoutSeconds` is clamped to 30–600 s. A 202 from the seller is reported as `paymentResult.pending: true` with `success: false`. `facilitatorUrl` is deprecated and unused. Both the EVM and Solana clients now also read the receipt from an x402 v1 `X-PAYMENT-RESPONSE` header. EOA signers only. New exports: `signPermit2Payment`, `PERMIT2_ADDRESS`, `X402_PERMIT2_PROXY`.
+
 ## 0.5.1
 
 ### Patch Changes
