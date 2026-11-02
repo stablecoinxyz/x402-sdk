@@ -226,10 +226,9 @@ export function resolvePayer(verifyPayer: string | undefined, inner: unknown): s
  *   the digest, and the resource is NOT served: the facilitator reports a given payment's
  *   success at most once, so serving here would let anyone holding a copy of a paid header
  *   replay it for free. The SDK never retries a settle (FacilitatorClient.settle), so
- *   this means someone else submitted the same signed bytes. Known facilitator defect, being
- *   fixed there: at x402-facilitator f3341d3 (src/routes/settle.ts:523-533) it also says
- *   duplicate_settlement for a broadcast it made itself and lost the receipt of, so an honest
- *   buyer can be refused; the digest lets them prove the payment.
+ *   this means the same signed bytes were already settled by someone else. Since
+ *   x402-facilitator 6c894e4 (PR #24) a broadcast whose receipt was lost answers success, and
+ *   a second settle while the first is unresolved answers settlement_pending, not this.
  */
 export function unsettledReply(
   result: { errorReason?: string; transaction?: string; txHash?: string }
