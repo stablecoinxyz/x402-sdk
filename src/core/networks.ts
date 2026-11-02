@@ -11,6 +11,9 @@ import type { NetworkConfig } from "./types.js";
 // the domain version the facilitator and the agent platform sign with.
 const SBC_DOMAIN = { name: "Stable Coin", version: "1" };
 
+// `decimals` on each token entry is the contract's on-chain decimals(), read 2026-11-02 with
+// `cast call <token> "decimals()(uint8)" --rpc-url <rpcUrl>` against each network's rpcUrl below.
+
 // Sui. The SBC facilitator settles native Circle USDC on Sui as x402 v2 `exact` payments the
 // payer signs and the facilitator submits (gasless: no fee payer). The paywall never talks to
 // the chain itself; `rpcUrl` is the public fullnode, recorded for reference only.
@@ -42,8 +45,8 @@ export const SUPPORTED_NETWORKS: Record<string, NetworkConfig> = {
     decimals: 18,
     tokenName: "Stable Coin",
     tokens: [
-      { address: "0xfdcC3dd6671eaB0709A4C0f3F53De9a333d80798", ...SBC_DOMAIN },
-      { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", name: "USD Coin", version: "2" },
+      { address: "0xfdcC3dd6671eaB0709A4C0f3F53De9a333d80798", ...SBC_DOMAIN, decimals: 18 },
+      { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", name: "USD Coin", version: "2", decimals: 6 },
     ],
   },
   "base-sepolia": {
@@ -57,8 +60,8 @@ export const SUPPORTED_NETWORKS: Record<string, NetworkConfig> = {
     decimals: 6,
     tokenName: "Stable Coin",
     tokens: [
-      { address: "0xf9FB20B8E097904f0aB7d12e9DbeE88f2dcd0F16", ...SBC_DOMAIN },
-      { address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e", name: "USDC", version: "2" },
+      { address: "0xf9FB20B8E097904f0aB7d12e9DbeE88f2dcd0F16", ...SBC_DOMAIN, decimals: 6 },
+      { address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e", name: "USDC", version: "2", decimals: 6 },
     ],
   },
   radius: {
@@ -72,7 +75,7 @@ export const SUPPORTED_NETWORKS: Record<string, NetworkConfig> = {
     decimals: 6,
     tokenName: "Stable Coin",
     tokens: [
-      { address: "0x33ad9e4bd16b69b5bfded37d8b5d9ff9aba014fb", ...SBC_DOMAIN },
+      { address: "0x33ad9e4bd16b69b5bfded37d8b5d9ff9aba014fb", ...SBC_DOMAIN, decimals: 6 },
     ],
   },
   "radius-testnet": {
@@ -86,7 +89,7 @@ export const SUPPORTED_NETWORKS: Record<string, NetworkConfig> = {
     decimals: 6,
     tokenName: "Stable Coin",
     tokens: [
-      { address: "0x33ad9e4bd16b69b5bfded37d8b5d9ff9aba014fb", ...SBC_DOMAIN },
+      { address: "0x33ad9e4bd16b69b5bfded37d8b5d9ff9aba014fb", ...SBC_DOMAIN, decimals: 6 },
     ],
   },
   solana: {

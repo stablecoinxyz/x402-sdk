@@ -211,3 +211,72 @@ describe("EVM client reads the seller's receipt under either header name", () =>
     expect(res.paymentResult?.txHash).toBe(tx);
   });
 });
+
+/**
+ * `maxAmount` is a USD cap. It must be converted with the decimals of the token being paid, not
+ * the network default: Base's network decimals are 18 (SBC) while USDC on Base has 6, so using
+ * the network value let a 5 USDC offer through a 1 USD cap (security-triage #24).
+ */
+describe("EVM client maxAmount cap uses the paid token's decimals", () => {
+  const BASE_SBC = "0xfdcC3dd6671eaB0709A4C0f3F53De9a333d80798";
+  const BASE_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+  const UNKNOWN = "0x9999999999999999999999999999999999999999";
+  const sbc = (amount: string) => offer({ network: "eip155:8453", amount, maxAmountRequired: amount, asset: BASE_SBC });
+  const usdc = (amount: string) =>
+    offer({ network: "eip155:8453", amount, maxAmountRequired: amount, asset: BASE_USDC, extra: { assetTransferMethod: "permit2", name: "USD Coin", version: "2" } });
+  const unknown = (amount: string) =>
+    offer({ network: "eip155:8453", amount, maxAmountRequired: amount, asset: UNKNOWN, extra: { assetTransferMethod: "permit2", name: "Other", version: "1" } });
+  const pay = (accepts: Json[], maxAmount?: string) => {
+    const f = flow(accepts, { allowance: 10n ** 30n });
+    const run = createX402Client({ signer: realSigner(), rpcUrl: RPC, skipBalanceCheck: true, fetchFn: f.fetchFn })
+      .fetch(TARGET, maxAmount === undefined ? {} : { maxAmount });
+    return { f, run };
+  };
+
+  it("refuses 5 USDC on Base under a 1 USD cap, and signs nothing", async () => {
+    const { f, run } = pay([usdc("5000000")], "1");
+    await expect(run).rejects.toThrow(/No suitable payment option/);
+    expect(f.sent.header).toBeUndefined();
+  });
+
+  it("pays 0.5 USDC on Base under a 1 USD cap", async () => {
+    const { f, run } = pay([usdc("500000")], "1");
+    await run;
+    expect(f.payload().payload.permit2Authorization.permitted).toEqual({ token: BASE_USDC, amount: "500000" });
+  });
+
+  it("refuses 5 SBC (18 decimals) on Base under a 1 USD cap", async () => {
+    const { run } = pay([sbc("5000000000000000000")], "1");
+    await expect(run).rejects.toThrow(/No suitable payment option/);
+  });
+
+  it("pays 0.5 SBC (18 decimals) on Base under a 1 USD cap", async () => {
+    const { f, run } = pay([sbc("500000000000000000")], "1");
+    await run;
+    expect(f.payload().payload.permit2Authorization.permitted.token).toBe(BASE_SBC);
+  });
+
+  it("refuses a token this SDK does not know when a cap is set (its USD value is unknown)", async () => {
+    const { f, run } = pay([unknown("1")], "1000");
+    await expect(run).rejects.toThrow(/No suitable payment option/);
+    expect(f.sent.header).toBeUndefined();
+  });
+
+  it("still pays a token this SDK does not know when no cap is set", async () => {
+    const { f, run } = pay([unknown("1")]);
+    await run;
+    expect(f.payload().payload.permit2Authorization.permitted.token).toBe(UNKNOWN);
+  });
+
+  it("picks the cheaper offer in USD across tokens of different decimals (0.50 SBC over 0.90 USDC)", async () => {
+    const { f, run } = pay([usdc("900000"), sbc("500000000000000000")], "1");
+    await run;
+    expect(f.payload().payload.permit2Authorization.permitted.token).toBe(BASE_SBC);
+  });
+
+  it.each(["0x10", "1.5.5", "-1", "1e6", "", " 1", "1_000"])("rejects a malformed cap %j instead of reading it as a number", async (cap) => {
+    const { f, run } = pay([usdc("1")], cap);
+    await expect(run).rejects.toThrow(/maxAmount must be a non-negative decimal string/);
+    expect(f.sent.header).toBeUndefined();
+  });
+});
