@@ -69,10 +69,17 @@ export interface SolanaPaymentPayload {
   signature: string; // Base58 Ed25519 signature
 }
 
+/** Sui `exact` payload: a signed, gasless USDC transfer the facilitator submits. */
+export interface SuiPaymentPayload {
+  transaction: string; // base64 BCS transaction bytes
+  signature: string;   // base64 Sui signature over them
+}
+
 export type PaymentPayloadInner =
   | Eip3009Payload
   | AuthorizationPayload
-  | SolanaPaymentPayload;
+  | SolanaPaymentPayload
+  | SuiPaymentPayload;
 
 /**
  * Outer payment payload sent to the facilitator and in the PAYMENT-SIGNATURE header.

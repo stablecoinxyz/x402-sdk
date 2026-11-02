@@ -14,7 +14,7 @@ SDK for the [x402 HTTP payment protocol](https://x402.org) — gate your API beh
 4. Server verifies + settles via the facilitator — tokens flow payer → merchant
 5. Server returns the gated content
 
-The facilitator never holds funds. EVM uses ERC-2612 Permit (no pre-approval). Solana uses Ed25519 delegation (one-time `approve` required — [see below](#solana-payments)).
+The facilitator never holds funds. EVM uses ERC-2612 Permit (no pre-approval). Solana uses Ed25519 delegation (one-time `approve` required — [see below](#solana-payments)). Sui sellers are paid in native USDC: the payer signs a gasless transfer and the facilitator submits it ([see below](#sui-payments)).
 
 ---
 
@@ -167,8 +167,34 @@ Amounts are in atomic units (no decimals). SBC has different precision per chain
 | `radius-testnet` | Radius testnet | SBC: `0x33ad9e4bd16b69b5bfded37d8b5d9ff9aba014fb` — free test tokens |
 | `solana` | Solana mainnet | SBC: `DBAzBUXaLj1qANCseUPZz4sp9F8d2sc78C4vKjhbTGMA` |
 | `solana-devnet` | Solana devnet | Free test tokens |
+| `sui` | Sui mainnet | USDC: `0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC` (6 decimals). Seller middleware only |
+| `sui-testnet` | Sui testnet | USDC: `0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC` (6 decimals). Seller middleware only |
 
 **Testing on testnet:** Use `base-sepolia` for EVM or `solana-devnet` for Solana — amounts are in the smaller denomination and you can get free tokens from a faucet.
+
+---
+
+## Sui payments
+
+`paywall` accepts `network: 'sui'` or `'sui-testnet'`. The price is in USDC atomic units (6 decimals), and `payTo` must be a full Sui address (`0x` + 64 hex), checked when `paywall()` is called:
+
+```ts
+app.get('/premium', paywall({ payTo: '0x<64 hex>', amount: '10000', network: 'sui-testnet' }), handler) // 0.01 USDC
+```
+
+The 402 offer uses CAIP-2 `network` (`sui:mainnet` / `sui:testnet`), `amount`, and `extra: {}`; `maxAmountRequired` is still sent with the same value. `settle: false` is not allowed on Sui: verify only simulates the signed transaction, so one payment would pass verify until its epoch window closes. The buyer signs a gasless USDC transfer and the facilitator submits it, so neither the seller nor the SDK needs a Sui dependency. This SDK has no Sui buyer client; the SBC agent platform pays Sui sellers.
+
+Once a Sui transaction may have been broadcast, the middleware never answers 402, because a 402 invites the buyer to sign and pay again:
+
+| Facilitator outcome | Response | Handler runs |
+|---|---|---|
+| settled | handler's response, `PAYMENT-RESPONSE` header with the digest | yes |
+| `settlement_pending` (broadcast, outcome not yet known) | `202 { pending: true, payment: { txHash } }` | no |
+| `duplicate_settlement` (this signed transaction already executed) | `409 { reason: "duplicate_settlement", payment: { txHash } }` | no |
+| settle call failed (timeout, dropped connection) | `504 { error: "settlement_unknown", outcome: "unknown" }` | no |
+| any other failure | `402` | no |
+
+A duplicate is not served because the facilitator reports each payment's success once; serving it would let a copied payment header be replayed for free.
 
 ---
 
@@ -236,7 +262,7 @@ type PaymentResult = {
 | `facilitatorUrl` | `string` | hosted | Override facilitator endpoint |
 | `settle` | `boolean` | `true` | Set `false` to verify-only (skip on-chain settlement). Not allowed on EVM networks: verify does not consume the Permit2 nonce, so one signed payment would pass verify forever |
 
-On EVM networks the 402 offer is the x402 v2 Permit2 shape the SBC facilitator settles: CAIP-2 `network` (e.g. `eip155:8453`), `amount`, and `extra: { assetTransferMethod: "permit2", name, version }`. `maxAmountRequired` is still sent with the same value. Solana offers are unchanged. Several offers on one network (e.g. SBC and USDC on Base) are matched to the payment by the asset, `payTo` and amount the buyer echoes back. Buyers on the SBC agent platform currently read only the first offer and pay only SBC, so list an EVM SBC offer first if you want them to pay.
+On EVM networks the 402 offer is the x402 v2 Permit2 shape the SBC facilitator settles: CAIP-2 `network` (e.g. `eip155:8453`), `amount`, and `extra: { assetTransferMethod: "permit2", name, version }`. `maxAmountRequired` is still sent with the same value. Solana offers are unchanged. Several offers on one network (e.g. SBC and USDC on Base) are matched to the payment by the asset, `payTo` and amount the buyer echoes back. Buyers on the SBC agent platform currently read only the first offer and pay only SBC, so list an EVM SBC offer first if you want them to pay. Sui offers are described in [Sui payments](#sui-payments).
 
 ### Signer adapters — `/evm`
 
@@ -267,7 +293,7 @@ ethersSignerAdapter(signer)       // ethers.js v5/v6 Signer
 Runnable end-to-end examples in [`examples/`](./examples/README.md):
 
 ```bash
-# Terminal 1 — server (accepts EVM + Solana)
+# Terminal 1 — server (accepts EVM + Solana; set SUI_PAY_TO to add Sui)
 cd examples/express-server && cp .env.example .env && pnpm install && pnpm start
 
 # Terminal 2 — Base client

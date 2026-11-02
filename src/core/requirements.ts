@@ -8,7 +8,7 @@
  * version must be the token's real ones. Solana requirements are unchanged.
  */
 
-import { SUPPORTED_NETWORKS, toCAIP2 } from "./networks.js";
+import { SUPPORTED_NETWORKS, isSuiNetwork, toCAIP2 } from "./networks.js";
 import type { EvmTokenInfo, PaymentRequirement } from "./types.js";
 
 export const DEFAULT_MAX_TIMEOUT_SECONDS = 300;
@@ -40,6 +40,7 @@ export interface ResolvedRequirement {
 }
 
 const EVM_ADDRESS = /^0x[0-9a-fA-F]{40}$/;
+const SUI_ADDRESS = /^0x[0-9a-fA-F]{64}$/;
 const ATOMIC_AMOUNT = /^[1-9]\d*$/;
 
 export function isEvmNetwork(network: string): boolean {
@@ -65,6 +66,25 @@ export function resolveRequirement(opt: RequirementOptions, label: string): Reso
     asset,
     description: opt.description,
   };
+  if (isSuiNetwork(opt.network)) {
+    if (opt.tokenName !== undefined || opt.tokenVersion !== undefined) {
+      throw new Error(`${label}: tokenName/tokenVersion apply to EVM networks only, not ${opt.network}`);
+    }
+    // Same reason as EVM below: Sui verify only simulates the signed transaction and consumes
+    // nothing, so one payment would pass verify until its epoch window closes.
+    if (opt.settle === false) {
+      throw new Error(`${label}: settle: false (verify-only) is not supported on Sui networks; one payment could be replayed`);
+    }
+    // The agent platform refuses a Sui offer whose payTo is not a full 32-byte address
+    // (agent-payments apps/web/lib/sui-x402.ts selectSuiRequirement).
+    if (!SUI_ADDRESS.test(opt.payTo)) {
+      throw new Error(`${label}: payTo must be a full Sui address (0x + 64 hex) on ${opt.network}`);
+    }
+    if (!ATOMIC_AMOUNT.test(opt.amount)) {
+      throw new Error(`${label}: amount must be a positive integer string in atomic units`);
+    }
+    return base;
+  }
   if (!isEvmNetwork(opt.network)) {
     if (opt.tokenName !== undefined || opt.tokenVersion !== undefined) {
       throw new Error(`${label}: tokenName/tokenVersion apply to EVM networks only, not ${opt.network}`);
@@ -124,7 +144,7 @@ export function matchRequirement<T extends { resolved: ResolvedRequirement }>(
   const same = (a: unknown, b: string) => typeof a === "string" && a.toLowerCase() === b.toLowerCase();
   return onNetwork.find(
     (e) =>
-      !e.resolved.token ||
+      (!e.resolved.token && !isSuiNetwork(e.resolved.network)) ||
       (same(accepted?.asset, e.resolved.asset) &&
         same(accepted?.payTo, e.resolved.payTo) &&
         accepted?.amount === e.resolved.amount)
@@ -145,6 +165,25 @@ export function buildRequirement(resource: string, r: ResolvedRequirement): Paym
       asset: r.asset,
       maxTimeoutSeconds: DEFAULT_MAX_TIMEOUT_SECONDS,
       extra: { assetTransferMethod: "permit2", name: r.token.name, version: r.token.version },
+    };
+  }
+  if (isSuiNetwork(r.network)) {
+    // The shape the SBC facilitator settles and the agent platform pays (agent-payments
+    // apps/web/app/api/demo/seller/route.ts suiDemoSeller): CAIP-2 network, `amount`, no
+    // facilitator address and no fee payer. The facilitator requires the buyer's echoed
+    // `accepted` to equal these on network, amount, asset and payTo
+    // (x402-facilitator src/sui/sui-exact.ts suiAcceptanceBindsRequirements).
+    return {
+      scheme: "exact",
+      network: r.caip2,
+      amount: r.amount,
+      maxAmountRequired: r.amount,
+      resource,
+      description: r.description,
+      payTo: r.payTo,
+      asset: r.asset,
+      maxTimeoutSeconds: DEFAULT_MAX_TIMEOUT_SECONDS,
+      extra: {},
     };
   }
   // Solana: unchanged from 0.4.1.
@@ -172,4 +211,47 @@ export function resolvePayer(verifyPayer: string | undefined, inner: unknown): s
   if (verifyPayer && verifyPayer !== "unknown") return verifyPayer;
   const p = inner as { authorization?: { from?: string }; from?: string; permit2Authorization?: { from?: string } } | undefined;
   return p?.permit2Authorization?.from || p?.authorization?.from || p?.from || "unknown";
+}
+
+/**
+ * The reply for a Sui settlement that did not succeed but may have moved money, or undefined
+ * when the failure is terminal and the usual 402 applies. A 402 here would invite the buyer to
+ * sign and pay again.
+ *
+ * - `settlement_pending`: the facilitator broadcast the transaction and does not yet know the
+ *   outcome. 202 with the digest, the shape agent-payments' Sui demo seller returns, so the
+ *   buyer reconciles the digest instead of re-signing.
+ * - `duplicate_settlement`: this exact signed transaction already executed on chain. 409 with
+ *   the digest, and the resource is NOT served: the facilitator reports a given payment's
+ *   success at most once, so serving here would let anyone holding a copy of a paid header
+ *   replay it for free. The cost is that a settle the SDK itself retried after a dropped
+ *   connection also lands here; the digest lets the buyer prove that payment.
+ */
+export function suiUnsettledReply(
+  network: string,
+  result: { errorReason?: string; transaction?: string; txHash?: string }
+): { status: number; body: Record<string, unknown> } | undefined {
+  if (!isSuiNetwork(network)) return undefined;
+  // The facilitator fills the digest on both outcomes; if it ever does not, the payment may
+  // still have moved, so the reply stays non-402 and simply carries no digest.
+  const txHash = result.transaction || result.txHash || undefined;
+  if (result.errorReason === "settlement_pending") {
+    return { status: 202, body: { pending: true, reason: "settlement_pending", payment: { txHash } } };
+  }
+  if (result.errorReason === "duplicate_settlement") {
+    return {
+      status: 409,
+      body: { error: "Payment already settled", reason: "duplicate_settlement", payment: { txHash } },
+    };
+  }
+  return undefined;
+}
+
+/**
+ * The reply when the settle call itself failed (timeout, dropped connection) on Sui. The
+ * facilitator may have broadcast the transaction, so the outcome is unknown: 504, never 402.
+ */
+export function suiSettleErrorReply(network: string, message: string): { status: number; body: Record<string, unknown> } | undefined {
+  if (!isSuiNetwork(network)) return undefined;
+  return { status: 504, body: { error: "settlement_unknown", detail: message, outcome: "unknown" } };
 }

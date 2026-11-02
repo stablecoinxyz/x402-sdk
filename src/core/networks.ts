@@ -11,6 +11,25 @@ import type { NetworkConfig } from "./types.js";
 // the domain version the facilitator and the agent platform sign with.
 const SBC_DOMAIN = { name: "Stable Coin", version: "1" };
 
+// Sui. The SBC facilitator settles native Circle USDC on Sui as x402 v2 `exact` payments the
+// payer signs and the facilitator submits (gasless: no fee payer). The paywall never talks to
+// the chain itself; `rpcUrl` is the public fullnode, recorded for reference only.
+// Coin types match the facilitator's allowlist and agent-payments apps/web/lib/sui-networks.ts.
+export const SUI_NETWORKS = {
+  sui: {
+    caip2: "sui:mainnet",
+    usdc: "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC",
+  },
+  "sui-testnet": {
+    caip2: "sui:testnet",
+    usdc: "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC",
+  },
+} as const;
+
+export function isSuiNetwork(network: string): network is keyof typeof SUI_NETWORKS {
+  return Object.prototype.hasOwnProperty.call(SUI_NETWORKS, network);
+}
+
 export const SUPPORTED_NETWORKS: Record<string, NetworkConfig> = {
   base: {
     chainId: 8453,
@@ -92,6 +111,28 @@ export const SUPPORTED_NETWORKS: Record<string, NetworkConfig> = {
     decimals: 9,
     tokenName: "",
   },
+  sui: {
+    chainId: 0, // Not applicable for Sui
+    name: "Sui",
+    rpcUrl: "https://fullnode.mainnet.sui.io:443",
+    facilitatorUrl: "https://x402.stablecoin.xyz",
+    facilitatorAddress: "", // No fee payer: the payer signs a gasless USDC transfer
+    defaultAsset: SUI_NETWORKS.sui.usdc,
+    explorerUrl: "https://suiscan.xyz/mainnet",
+    decimals: 6,
+    tokenName: "",
+  },
+  "sui-testnet": {
+    chainId: 0,
+    name: "Sui Testnet",
+    rpcUrl: "https://fullnode.testnet.sui.io:443",
+    facilitatorUrl: "https://x402.stablecoin.xyz",
+    facilitatorAddress: "",
+    defaultAsset: SUI_NETWORKS["sui-testnet"].usdc,
+    explorerUrl: "https://suiscan.xyz/testnet",
+    decimals: 6,
+    tokenName: "",
+  },
 };
 
 export function getNetworkConfig(network: string): NetworkConfig {
@@ -110,5 +151,6 @@ export function toCAIP2(network: string): string {
   }
   if (network === "solana") return "solana:mainnet-beta";
   if (network === "solana-devnet") return "solana:devnet";
+  if (isSuiNetwork(network)) return SUI_NETWORKS[network].caip2;
   return `eip155:${config.chainId}`;
 }

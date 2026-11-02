@@ -2,7 +2,7 @@
  * x402 Express server example
  *
  * Gates /premium behind x402 payment using @stablecoin.xyz/x402/middleware.
- * Supports single or multi-network (Base + Radius + Solana).
+ * Supports single or multi-network (Base + Radius + Solana + Sui).
  *
  * Usage:
  *   npx tsx --env-file=.env server.ts
@@ -28,6 +28,11 @@ const SOLANA_PAY_TO = process.env.SOLANA_PAY_TO;
 const SOLANA_AMOUNT = process.env.SOLANA_AMOUNT || "1000000"; // 0.001 SBC on Solana (9 decimals)
 const SOLANA_NETWORK = process.env.SOLANA_NETWORK || "solana";
 
+// Optional: add Sui payment option (native USDC, 6 decimals)
+const SUI_PAY_TO = process.env.SUI_PAY_TO;
+const SUI_AMOUNT = process.env.SUI_AMOUNT || "10000"; // 0.01 USDC
+const SUI_NETWORK = process.env.SUI_NETWORK || "sui";
+
 const paymentOptions: X402MiddlewareOptions[] = [
   { payTo: BASE_PAY_TO, amount: BASE_AMOUNT, network: BASE_NETWORK },
   ...(RADIUS_PAY_TO
@@ -35,6 +40,9 @@ const paymentOptions: X402MiddlewareOptions[] = [
     : []),
   ...(SOLANA_PAY_TO
     ? [{ payTo: SOLANA_PAY_TO, amount: SOLANA_AMOUNT, network: SOLANA_NETWORK } as X402MiddlewareOptions]
+    : []),
+  ...(SUI_PAY_TO
+    ? [{ payTo: SUI_PAY_TO, amount: SUI_AMOUNT, network: SUI_NETWORK } as X402MiddlewareOptions]
     : []),
 ];
 
@@ -70,6 +78,7 @@ app.listen(PORT, () => {
   console.log(`x402 Express server on http://localhost:${PORT}`);
   paymentOptions.forEach((opt) => {
     const human = formatAmount(String(opt.amount), String(opt.network));
-    console.log(`  [${opt.network}] payTo: ${opt.payTo}, amount: ${human} SBC`);
+    const token = String(opt.network).startsWith("sui") ? "USDC" : "SBC";
+    console.log(`  [${opt.network}] payTo: ${opt.payTo}, amount: ${human} ${token}`);
   });
 });
