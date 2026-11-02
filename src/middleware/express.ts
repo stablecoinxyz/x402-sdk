@@ -129,8 +129,13 @@ export function paywall(opts: X402MiddlewareOptions | X402MiddlewareOptions[]) {
         const settleResult = await facilitator.settle(paymentPayload, requirement);
         console.log("[x402] settle →", JSON.stringify(settleResult));
         if (!settleResult.success) {
+          // A hash here (settlement_pending, duplicate_settlement) means money may have moved:
+          // hand it to the buyer so they check it instead of signing a second payment.
+          const tx = settleResult.txHash ?? settleResult.transaction;
           return res.status(402).json({
             error: `Payment settlement failed: ${settleResult.error ?? settleResult.errorReason}`,
+            ...(settleResult.errorReason ? { errorReason: settleResult.errorReason } : {}),
+            ...(tx ? { transaction: tx } : {}),
           });
         }
 

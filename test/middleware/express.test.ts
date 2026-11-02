@@ -54,7 +54,8 @@ function makeMockFetch(verify: object, settle: object) {
   });
 }
 
-function makePaymentHeader(payload: object = { accepted: { network: "eip155:84532", scheme: "exact" }, payload: {} }) {
+// The full echo of the default offer: EVM payments must name the offer's asset, payTo and amount.
+function makePaymentHeader(payload: object = { accepted: { network: "eip155:84532", scheme: "exact", asset: "0xf9FB20B8E097904f0aB7d12e9DbeE88f2dcd0F16", payTo: PAY_TO, amount: AMOUNT }, payload: {} }) {
   return toBase64(JSON.stringify(payload));
 }
 
@@ -289,7 +290,7 @@ describe("x402Middleware — multi-network (array input)", () => {
       { payTo: SOL_PAY_TO, amount: "1000000", network: "solana-devnet", facilitatorUrl: "https://sol.test", fetchFn: vi.fn() },
     ]);
     const next = makeNext();
-    const evmPayload = { accepted: { network: "eip155:84532", scheme: "exact" }, payload: {} };
+    const evmPayload = { accepted: { network: "eip155:84532", scheme: "exact", asset: "0xf9FB20B8E097904f0aB7d12e9DbeE88f2dcd0F16", payTo: EVM_PAY_TO, amount: "1000000" }, payload: {} };
     await middleware(makeReq({ "payment-signature": toBase64(JSON.stringify(evmPayload)) }), makeRes(), next);
 
     expect(next).toHaveBeenCalled();
@@ -314,32 +315,7 @@ describe("x402Middleware — multi-network (array input)", () => {
 });
 
 describe("x402Middleware — settle: false (verify-only mode)", () => {
-  it("skips settle and calls next() after successful verify", async () => {
-    const fetchFn = vi.fn(async (input: RequestInfo | URL) => {
-      const url = typeof input === "string" ? input : (input as URL).href;
-      if (url.endsWith("/verify")) return makeFetchResponse(200, { isValid: true });
-      throw new Error(`Unexpected: ${url}`);
-    });
-    const middleware = x402Middleware({
-      payTo: PAY_TO,
-      amount: AMOUNT,
-      network: NETWORK,
-      facilitatorUrl: "https://f.test",
-      settle: false,
-      fetchFn,
-    });
-    const next = makeNext();
-
-    await middleware(
-      makeReq({ "payment-signature": makePaymentHeader() }),
-      makeRes(),
-      next
-    );
-
-    expect(next).toHaveBeenCalled();
-    const allUrls = fetchFn.mock.calls.map((args) =>
-      typeof args[0] === "string" ? args[0] : (args[0] as URL).href
-    );
-    expect(allUrls.some((u) => u.endsWith("/settle"))).toBe(false);
+  it("is refused on EVM networks at construction (one payment would be replayable without limit)", () => {
+    expect(() => x402Middleware({ payTo: PAY_TO, amount: AMOUNT, network: NETWORK, settle: false })).toThrow(/verify-only/);
   });
 });

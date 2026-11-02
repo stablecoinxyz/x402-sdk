@@ -10,7 +10,8 @@ function makeRequest(headers: Record<string, string> = {}, url = "https://api.ex
   return new Request(url, { headers });
 }
 
-function makePaymentHeader(payload: object = { accepted: { network: "eip155:84532", scheme: "exact" }, payload: {} }) {
+// The full echo of the default offer: EVM payments must name the offer's asset, payTo and amount.
+function makePaymentHeader(payload: object = { accepted: { network: "eip155:84532", scheme: "exact", asset: "0xf9FB20B8E097904f0aB7d12e9DbeE88f2dcd0F16", payTo: PAY_TO, amount: AMOUNT }, payload: {} }) {
   return toBase64(JSON.stringify(payload));
 }
 
@@ -206,32 +207,7 @@ describe("withX402 — settle failure", () => {
 });
 
 describe("withX402 — settle: false (verify-only mode)", () => {
-  it("skips settle and calls handler after verify-only", async () => {
-    const fetchFn = vi.fn(async (input: RequestInfo | URL) => {
-      const url = typeof input === "string" ? input : (input as URL).href;
-      if (url.endsWith("/verify")) return makeFetchResponse(200, { isValid: true });
-      throw new Error(`Unexpected: ${url}`);
-    });
-    const handlerFn = vi.fn(async () => new Response("ok"));
-    const handler = withX402(
-      {
-        payTo: PAY_TO,
-        amount: AMOUNT,
-        network: NETWORK,
-        facilitatorUrl: "https://f.test",
-        settle: false,
-        fetchFn,
-      },
-      handlerFn
-    );
-
-    const res = await handler(makeRequest({ "payment-signature": makePaymentHeader() }));
-
-    expect(res.status).toBe(200);
-    expect(handlerFn).toHaveBeenCalled();
-    const allUrls = fetchFn.mock.calls.map((args) =>
-      typeof args[0] === "string" ? args[0] : (args[0] as URL).href
-    );
-    expect(allUrls.some((u) => u.endsWith("/settle"))).toBe(false);
+  it("is refused on EVM networks at construction (one payment would be replayable without limit)", () => {
+    expect(() => withX402({ payTo: PAY_TO, amount: AMOUNT, network: NETWORK, settle: false }, async () => new Response("ok"))).toThrow(/verify-only/);
   });
 });

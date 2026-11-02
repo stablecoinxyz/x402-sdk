@@ -23,6 +23,8 @@ export interface RequirementOptions {
   tokenName?: string;
   /** EIP-712 domain version of `asset`, needed only when it is not a token this SDK knows. */
   tokenVersion?: string;
+  /** `false` = verify only. Refused on EVM: see resolveRequirement. */
+  settle?: boolean;
 }
 
 /** A paywall entry resolved once, at construction, so misconfiguration fails at startup. */
@@ -70,6 +72,12 @@ export function resolveRequirement(opt: RequirementOptions, label: string): Reso
     return base;
   }
 
+  // Verify-only cannot be made safe on EVM: the facilitator's verify does not consume the
+  // Permit2 nonce or cap the deadline, so one signed payment would pass verify forever and
+  // the handler would be served without limit while nothing settles.
+  if (opt.settle === false) {
+    throw new Error(`${label}: settle: false (verify-only) is not supported on EVM networks; one payment could be replayed without limit`);
+  }
   if (!EVM_ADDRESS.test(opt.payTo) || /^0x0{40}$/.test(opt.payTo)) {
     throw new Error(`${label}: payTo must be a non-zero 0x-prefixed 20-byte address on ${opt.network}`);
   }
@@ -102,22 +110,24 @@ export function resolveRequirement(opt: RequirementOptions, label: string): Reso
 
 /**
  * Pick the paywall entry a payment is for. Network alone is not enough: one network can
- * carry several offers (SBC and USDC on Base). The buyer's echoed `accepted` names the
- * asset and payTo; an entry whose fields contradict the echo is never chosen, so the
- * facilitator is never handed requirements for a different offer than the one signed.
+ * carry several offers (SBC and USDC on Base). On EVM the buyer's echoed `accepted` must
+ * name this entry's asset, payTo and amount, so the facilitator is never handed
+ * requirements for a different offer than the one signed, and a payment that cannot pass
+ * the facilitator's envelope check is refused here without spending a facilitator call.
+ * Solana entries match on network, as in 0.4.1.
  */
 export function matchRequirement<T extends { resolved: ResolvedRequirement }>(
   entries: T[],
   accepted: { network?: unknown; asset?: unknown; payTo?: unknown; amount?: unknown } | undefined
 ): T | undefined {
   const onNetwork = entries.filter((e) => e.resolved.caip2 === accepted?.network);
-  if (onNetwork.length <= 1) return onNetwork[0];
   const same = (a: unknown, b: string) => typeof a === "string" && a.toLowerCase() === b.toLowerCase();
   return onNetwork.find(
     (e) =>
-      same(accepted?.asset, e.resolved.asset) &&
-      same(accepted?.payTo, e.resolved.payTo) &&
-      (accepted?.amount === undefined || accepted.amount === e.resolved.amount)
+      !e.resolved.token ||
+      (same(accepted?.asset, e.resolved.asset) &&
+        same(accepted?.payTo, e.resolved.payTo) &&
+        accepted?.amount === e.resolved.amount)
   );
 }
 
