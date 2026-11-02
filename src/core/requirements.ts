@@ -214,27 +214,27 @@ export function resolvePayer(verifyPayer: string | undefined, inner: unknown): s
 }
 
 /**
- * The reply for a Sui settlement that did not succeed but may have moved money, or undefined
- * when the failure is terminal and the usual 402 applies. A 402 here would invite the buyer to
- * sign and pay again.
+ * The reply for a settlement that did not succeed but may have moved money, on any network,
+ * or undefined when the failure is terminal (e.g. mined and reverted) and the usual 402
+ * applies. A 402 here would invite the buyer to sign and pay again.
  *
  * - `settlement_pending`: the facilitator broadcast the transaction and does not yet know the
- *   outcome. 202 with the digest, the shape agent-payments' Sui demo seller returns, so the
- *   buyer reconciles the digest instead of re-signing.
- * - `duplicate_settlement`: this exact signed transaction already executed on chain. 409 with
+ *   outcome (x402-facilitator src/routes/settle.ts answers this on EVM, Solana and Sui). 202
+ *   with the transaction, the shape agent-payments' Sui demo seller returns, so the buyer
+ *   reconciles it instead of re-signing.
+ * - `duplicate_settlement` (Sui only today): this exact signed transaction already executed on chain. 409 with
  *   the digest, and the resource is NOT served: the facilitator reports a given payment's
  *   success at most once, so serving here would let anyone holding a copy of a paid header
- *   replay it for free. The SDK never retries a Sui settle (FacilitatorClient.settle), so
- *   this is someone else's submit of the same signed bytes, or the facilitator relabeling a
- *   broadcast whose receipt it lost (x402-facilitator src/routes/settle.ts). In that last
- *   case the honest buyer is refused; the digest lets them prove the payment.
+ *   replay it for free. The SDK never retries a settle (FacilitatorClient.settle), so
+ *   this means someone else submitted the same signed bytes. Known facilitator defect, being
+ *   fixed there: at x402-facilitator f3341d3 (src/routes/settle.ts:523-533) it also says
+ *   duplicate_settlement for a broadcast it made itself and lost the receipt of, so an honest
+ *   buyer can be refused; the digest lets them prove the payment.
  */
-export function suiUnsettledReply(
-  network: string,
+export function unsettledReply(
   result: { errorReason?: string; transaction?: string; txHash?: string }
 ): { status: number; body: Record<string, unknown> } | undefined {
-  if (!isSuiNetwork(network)) return undefined;
-  // The facilitator fills the digest on both outcomes; if it ever does not, the payment may
+  // The facilitator fills the transaction on both outcomes; if it ever does not, the payment may
   // still have moved, so the reply stays non-402 and simply carries no digest.
   const txHash = result.transaction || result.txHash || undefined;
   if (result.errorReason === "settlement_pending") {
@@ -250,11 +250,10 @@ export function suiUnsettledReply(
 }
 
 /**
- * The reply when the settle call itself failed (timeout, dropped connection) on Sui. The
- * facilitator may have broadcast the transaction, so the outcome is unknown: 504, never 402.
+ * The reply when the settle call itself failed (timeout, dropped connection), on any network.
+ * The facilitator may have broadcast the transaction, so the outcome is unknown: 504, never 402.
  */
-export function suiSettleErrorReply(network: string, message: string): { status: number; body: Record<string, unknown> } | undefined {
-  if (!isSuiNetwork(network)) return undefined;
+export function settleErrorReply(message: string): { status: number; body: Record<string, unknown> } {
   return { status: 504, body: { error: "settlement_unknown", detail: message, outcome: "unknown" } };
 }
 
@@ -265,7 +264,7 @@ export const SUI_ALREADY_EXECUTED = "invalid_exact_sui_payload_already_executed"
  * The reply for a Sui /verify refusal that means the money already moved, or undefined when
  * the usual 402 applies. /verify refuses a transaction that already executed; a 402 would tell
  * a buyer who is retrying after a lost response to sign and pay again. 409, resource not
- * served, for the same reason as `duplicate_settlement` in `suiUnsettledReply`.
+ * served, for the same reason as `duplicate_settlement` in `unsettledReply`.
  */
 export function suiVerifyRejectReply(
   network: string,
