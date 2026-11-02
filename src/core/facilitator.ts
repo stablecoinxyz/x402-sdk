@@ -5,7 +5,7 @@
  */
 
 import type { PaymentPayload, PaymentRequirement, VerifyResponse, SettleResponse } from "./types.js";
-import { SUPPORTED_NETWORKS } from "./networks.js";
+import { SUI_NETWORKS, SUPPORTED_NETWORKS, isSuiNetwork } from "./networks.js";
 import { FacilitatorError, PaymentTimeoutError } from "./errors.js";
 import { withRetry } from "./retry.js";
 
@@ -114,7 +114,9 @@ export class FacilitatorClient {
         }
       },
       "Facilitator settle",
-      { maxAttempts: 3 }
+      // Never retry a Sui settle: a resubmit of bytes that may already have executed
+      // only produces duplicate_settlement. A failed call becomes "outcome unknown" (504).
+      { maxAttempts: paymentPayload.accepted.network.startsWith("sui:") ? 1 : 3 }
     );
   }
 
@@ -186,6 +188,7 @@ export function fromCAIP2(caip2: string): string {
     if (`eip155:${config.chainId}` === caip2) return name;
     if (name === "solana" && caip2 === "solana:mainnet-beta") return name;
     if (name === "solana-devnet" && caip2 === "solana:devnet") return name;
+    if (isSuiNetwork(name) && SUI_NETWORKS[name].caip2 === caip2) return name;
   }
   return caip2;
 }

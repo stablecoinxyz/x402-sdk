@@ -30,6 +30,7 @@ export type {
   SettleResponse,
   AuthorizationPayload,
   SolanaPaymentPayload,
+  SuiPaymentPayload,
   Eip3009Payload,
   TransferAuthorization,
 } from "./core/types.js";

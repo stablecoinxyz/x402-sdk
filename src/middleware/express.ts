@@ -13,7 +13,16 @@
  */
 
 import { FacilitatorClient } from "../core/facilitator.js";
-import { buildRequirement, matchRequirement, resolvePayer, resolveRequirement, type ResolvedRequirement } from "../core/requirements.js";
+import {
+  buildRequirement,
+  matchRequirement,
+  resolvePayer,
+  resolveRequirement,
+  suiSettleErrorReply,
+  suiUnsettledReply,
+  suiVerifyRejectReply,
+  type ResolvedRequirement,
+} from "../core/requirements.js";
 import type {
   PaymentPayload,
   PaymentRequirementsResponse,
@@ -121,14 +130,25 @@ export function paywall(opts: X402MiddlewareOptions | X402MiddlewareOptions[]) {
       verifiedPayer = verifyResult.payer;
       console.log("[x402] verify →", JSON.stringify(verifyResult));
       if (!verifyResult.isValid) {
+        const rejected = suiVerifyRejectReply(opt.network, verifyResult);
+        if (rejected) return res.status(rejected.status).json(rejected.body);
         return send402(res, buildRequirements(req.url, entries), verifyResult.invalidReason);
       }
 
       // Settle
       if (opt.settle) {
-        const settleResult = await facilitator.settle(paymentPayload, requirement);
+        let settleResult;
+        try {
+          settleResult = await facilitator.settle(paymentPayload, requirement);
+        } catch (err) {
+          const reply = suiSettleErrorReply(opt.network, err instanceof Error ? err.message : String(err));
+          if (reply) return res.status(reply.status).json(reply.body);
+          throw err;
+        }
         console.log("[x402] settle →", JSON.stringify(settleResult));
         if (!settleResult.success) {
+          const unsettled = suiUnsettledReply(opt.network, settleResult);
+          if (unsettled) return res.status(unsettled.status).json(unsettled.body);
           // A hash here (settlement_pending, duplicate_settlement) means money may have moved:
           // hand it to the buyer so they check it instead of signing a second payment.
           const tx = settleResult.txHash ?? settleResult.transaction;

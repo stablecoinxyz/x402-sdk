@@ -13,7 +13,16 @@
  */
 
 import { FacilitatorClient } from "../core/facilitator.js";
-import { buildRequirement, matchRequirement, resolvePayer, resolveRequirement, type ResolvedRequirement } from "../core/requirements.js";
+import {
+  buildRequirement,
+  matchRequirement,
+  resolvePayer,
+  resolveRequirement,
+  suiSettleErrorReply,
+  suiUnsettledReply,
+  suiVerifyRejectReply,
+  type ResolvedRequirement,
+} from "../core/requirements.js";
 import type { PaymentPayload, PaymentRequirementsResponse, PaymentRequirement } from "../core/types.js";
 
 export interface WithX402Options {
@@ -100,13 +109,24 @@ export function paywall(opts: WithX402Options | WithX402Options[], handler: Next
       // Verify
       const verifyResult = await facilitator.verify(paymentPayload, requirement);
       if (!verifyResult.isValid) {
+        const rejected = suiVerifyRejectReply(opt.network, verifyResult);
+        if (rejected) return Response.json(rejected.body, { status: rejected.status });
         return build402Response(request.url, entries, verifyResult.invalidReason);
       }
 
       // Settle
       if (opt.settle) {
-        const settleResult = await facilitator.settle(paymentPayload, requirement);
+        let settleResult;
+        try {
+          settleResult = await facilitator.settle(paymentPayload, requirement);
+        } catch (err) {
+          const reply = suiSettleErrorReply(opt.network, err instanceof Error ? err.message : String(err));
+          if (reply) return Response.json(reply.body, { status: reply.status });
+          throw err;
+        }
         if (!settleResult.success) {
+          const unsettled = suiUnsettledReply(opt.network, settleResult);
+          if (unsettled) return Response.json(unsettled.body, { status: unsettled.status });
           // A hash here (settlement_pending, duplicate_settlement) means money may have moved:
           // hand it to the buyer so they check it instead of signing a second payment.
           const tx = settleResult.txHash ?? settleResult.transaction;
