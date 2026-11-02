@@ -326,3 +326,37 @@ describe("Sui settle is sent once, never retried", () => {
     expect(res._status()).toBe(504);
   });
 });
+
+describe("Sui settle reasons added by x402-facilitator 6c894e4", () => {
+  // Executed on chain, but payTo was not credited exactly the amount: money moved, so not a 402.
+  const mismatch = { success: false, payer: SUI_BUYER, transaction: DIGEST, errorReason: "settlement_effects_mismatch" };
+  // The facilitator's settlement ledger is down: nothing was submitted, so "try later", not "pay".
+  const noLedger = { success: false, payer: SUI_BUYER, transaction: "", errorReason: "sui_durability_unavailable" };
+
+  it("express: settlement_effects_mismatch → 409 with the digest, handler not run", async () => {
+    const { res, next } = await payExpress(mismatch);
+    expect(res._status()).toBe(409);
+    expect(res._body()).toMatchObject({ reason: "settlement_effects_mismatch", payment: { txHash: DIGEST } });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("nextjs: settlement_effects_mismatch → 409 with the digest, handler not run", async () => {
+    const { res, handler } = await payNext(mismatch);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ reason: "settlement_effects_mismatch", payment: { txHash: DIGEST } });
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("express: sui_durability_unavailable → 503, handler not run", async () => {
+    const { res, next } = await payExpress(noLedger);
+    expect(res._status()).toBe(503);
+    expect(res._body()).toMatchObject({ reason: "sui_durability_unavailable" });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("nextjs: sui_durability_unavailable → 503, handler not run", async () => {
+    const { res, handler } = await payNext(noLedger);
+    expect(res.status).toBe(503);
+    expect(handler).not.toHaveBeenCalled();
+  });
+});

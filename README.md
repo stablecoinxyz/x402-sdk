@@ -191,6 +191,8 @@ Once a Sui transaction may have been broadcast, the middleware never answers 402
 | settled | handler's response, `PAYMENT-RESPONSE` header with the digest | yes |
 | `settlement_pending` (broadcast, outcome not yet known) | `202 { pending: true, payment: { txHash } }` | no |
 | `duplicate_settlement` (this signed transaction already executed) | `409 { reason: "duplicate_settlement", payment: { txHash } }` | no |
+| `settlement_effects_mismatch` (executed, but `payTo` was not credited exactly the amount) | `409 { reason: "settlement_effects_mismatch", payment: { txHash } }` | no |
+| `sui_durability_unavailable` (facilitator degraded; nothing was submitted) | `503 { reason: "sui_durability_unavailable" }` | no |
 | settle call failed (timeout, dropped connection) | `504 { error: "settlement_unknown", outcome: "unknown" }` | no |
 | verify says the transaction already executed (a retry after the money moved) | `409 { reason: "invalid_exact_sui_payload_already_executed" }` | no |
 | any other failure | `402` | no |
