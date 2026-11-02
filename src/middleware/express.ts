@@ -13,7 +13,7 @@
  */
 
 import { FacilitatorClient } from "../core/facilitator.js";
-import { SUPPORTED_NETWORKS, toCAIP2 } from "../core/networks.js";
+import { buildRequirement, matchRequirement, resolvePayer, resolveRequirement, type ResolvedRequirement } from "../core/requirements.js";
 import type {
   PaymentPayload,
   PaymentRequirementsResponse,
@@ -29,6 +29,10 @@ export interface X402MiddlewareOptions {
   network: string;
   /** Token contract address. Defaults to network's default asset. */
   asset?: string;
+  /** EIP-712 domain name of `asset`. Only needed for an EVM token this SDK does not list. */
+  tokenName?: string;
+  /** EIP-712 domain version of `asset`. Only needed for an EVM token this SDK does not list. */
+  tokenVersion?: string;
   /** Human-readable description shown to payer. */
   description?: string;
   /** Override facilitator URL. Defaults to network config. */
@@ -63,7 +67,7 @@ type NextFunction = (err?: unknown) => void;
 
 interface ResolvedEntry {
   opt: X402MiddlewareOptions & { settle: boolean };
-  asset: string;
+  resolved: ResolvedRequirement;
   facilitator: FacilitatorClient;
 }
 
@@ -72,13 +76,9 @@ export function paywall(opts: X402MiddlewareOptions | X402MiddlewareOptions[]) {
 
   // Validate all networks upfront and build resolved entries
   const entries: ResolvedEntry[] = optArray.map((opt) => {
-    const networkConfig = SUPPORTED_NETWORKS[opt.network];
-    if (!networkConfig) {
-      throw new Error(`x402Middleware: unsupported network "${opt.network}"`);
-    }
     return {
       opt: { ...opt, settle: opt.settle !== false },
-      asset: opt.asset ?? networkConfig.defaultAsset,
+      resolved: resolveRequirement(opt, "x402Middleware"),
       facilitator: new FacilitatorClient({ facilitatorUrl: opt.facilitatorUrl, fetchFn: opt.fetchFn }),
     };
   });
@@ -101,22 +101,24 @@ export function paywall(opts: X402MiddlewareOptions | X402MiddlewareOptions[]) {
 
     // Match payment to requirement by CAIP-2 network
     const paymentNetwork = paymentPayload.accepted?.network;
-    const matched = entries.find(({ opt }) => toCAIP2(opt.network) === paymentNetwork);
+    const matched = matchRequirement(entries, paymentPayload.accepted);
 
     if (!matched) {
       return send402(
         res,
         buildRequirements(req.url, entries),
-        `No payment option found for network "${paymentNetwork}"`
+        `No payment option on network "${paymentNetwork}" matches the offer in the payment`
       );
     }
 
-    const { opt, asset, facilitator } = matched;
-    const requirement = buildRequirement(req.url, opt.payTo, opt.amount, asset, opt.network, opt.description);
+    const { opt, resolved, facilitator } = matched;
+    const requirement = buildRequirement(req.url, resolved);
 
+    let verifiedPayer: string | undefined;
     try {
       // Verify
       const verifyResult = await facilitator.verify(paymentPayload, requirement);
+      verifiedPayer = verifyResult.payer;
       console.log("[x402] verify →", JSON.stringify(verifyResult));
       if (!verifyResult.isValid) {
         return send402(res, buildRequirements(req.url, entries), verifyResult.invalidReason);
@@ -127,8 +129,13 @@ export function paywall(opts: X402MiddlewareOptions | X402MiddlewareOptions[]) {
         const settleResult = await facilitator.settle(paymentPayload, requirement);
         console.log("[x402] settle →", JSON.stringify(settleResult));
         if (!settleResult.success) {
+          // A hash here (settlement_pending, duplicate_settlement) means money may have moved:
+          // hand it to the buyer so they check it instead of signing a second payment.
+          const tx = settleResult.txHash ?? settleResult.transaction;
           return res.status(402).json({
             error: `Payment settlement failed: ${settleResult.error ?? settleResult.errorReason}`,
+            ...(settleResult.errorReason ? { errorReason: settleResult.errorReason } : {}),
+            ...(tx ? { transaction: tx } : {}),
           });
         }
 
@@ -147,11 +154,7 @@ export function paywall(opts: X402MiddlewareOptions | X402MiddlewareOptions[]) {
     }
 
     // Attach payment metadata to req so handlers can access it
-    const inner = paymentPayload.payload as Record<string, any>;
-    const payer =
-      inner?.authorization?.from ||
-      inner?.from ||
-      "unknown";
+    const payer = resolvePayer(verifiedPayer, paymentPayload.payload);
     req.x402 = {
       payer,
       txHash: (res as any).getHeader?.("PAYMENT-RESPONSE")
@@ -177,9 +180,7 @@ export function paywall(opts: X402MiddlewareOptions | X402MiddlewareOptions[]) {
 // ---- Helpers ----
 
 function buildRequirements(resource: string, entries: ResolvedEntry[]): PaymentRequirement[] {
-  return entries.map(({ opt, asset }) =>
-    buildRequirement(resource, opt.payTo, opt.amount, asset, opt.network, opt.description)
-  );
+  return entries.map(({ resolved }) => buildRequirement(resource, resolved));
 }
 
 function send402(
@@ -197,30 +198,6 @@ function send402(
     ...body,
     ...(errorMessage ? { error: errorMessage } : {}),
   });
-}
-
-function buildRequirement(
-  resource: string,
-  payTo: string,
-  amount: string,
-  asset: string,
-  network: string,
-  description?: string,
-  maxTimeoutSeconds = 300
-): PaymentRequirement {
-  const networkConfig = SUPPORTED_NETWORKS[network];
-  return {
-    scheme: "exact",
-    network,
-    maxAmountRequired: amount,
-    resource,
-    description,
-    payTo,
-    asset,
-    maxTimeoutSeconds,
-    facilitator: networkConfig?.facilitatorAddress,
-    extra: networkConfig?.tokenName ? { name: networkConfig.tokenName } : undefined,
-  };
 }
 
 function toBase64(str: string): string {

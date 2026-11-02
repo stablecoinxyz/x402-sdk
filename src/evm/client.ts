@@ -10,6 +10,7 @@ import type { EvmSigner } from "./signer.js";
 import { signPermit, signTransferAuthorization, getTokenBalance } from "./signing.js";
 import { FacilitatorClient } from "../core/facilitator.js";
 import { SUPPORTED_NETWORKS, toCAIP2 } from "../core/networks.js";
+import { fromCAIP2 } from "../core/facilitator.js";
 import { InsufficientBalanceError } from "../core/errors.js";
 import { withRetry } from "../core/retry.js";
 import type {
@@ -259,13 +260,17 @@ function selectRequirement(
   preferredNetwork?: string,
   maxAmount?: string
 ): PaymentRequirement | null {
-  const supported = requirements.filter((r) => SUPPORTED_NETWORKS[r.network]);
+  // EVM offers only, keyed by friendly network name: paywall >= 0.5 advertises CAIP-2
+  // ("eip155:8453"), older sellers the friendly name. Solana offers are never this client's.
+  const supported = requirements
+    .map((r) => ({ ...r, network: SUPPORTED_NETWORKS[r.network] ? r.network : fromCAIP2(r.network) }))
+    .filter((r) => (SUPPORTED_NETWORKS[r.network]?.chainId ?? 0) > 0);
 
   let filtered = supported;
   if (maxAmount) {
     filtered = supported.filter((r) => {
       const decimals = SUPPORTED_NETWORKS[r.network]?.decimals ?? 6;
-      return BigInt(r.maxAmountRequired) <= usdToAtomic(maxAmount, decimals);
+      return BigInt(r.amount ?? r.maxAmountRequired) <= usdToAtomic(maxAmount, decimals);
     });
   }
 
@@ -280,7 +285,8 @@ function selectRequirement(
   const testnet = filtered.find((r) => r.network.includes("sepolia") || r.network.includes("testnet"));
   if (testnet) return testnet;
 
-  return filtered.sort((a, b) => Number(BigInt(a.maxAmountRequired) - BigInt(b.maxAmountRequired)))[0];
+  const atomic = (r: PaymentRequirement) => BigInt(r.amount ?? r.maxAmountRequired);
+  return filtered.sort((a, b) => Number(atomic(a) - atomic(b)))[0];
 }
 
 function usdToAtomic(usdAmount: string, decimals: number): bigint {

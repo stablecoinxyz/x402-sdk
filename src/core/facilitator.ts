@@ -58,7 +58,7 @@ export class FacilitatorClient {
             paymentRequirements: {
               ...paymentRequirements,
               network: paymentPayload.accepted.network, // always CAIP-2 (e.g. "eip155:8453")
-              amount: paymentRequirements.maxAmountRequired,
+              amount: paymentRequirements.amount ?? paymentRequirements.maxAmountRequired,
             },
           }),
         });
@@ -97,7 +97,7 @@ export class FacilitatorClient {
             paymentRequirements: {
               ...paymentRequirements,
               network: paymentPayload.accepted.network, // always CAIP-2 (e.g. "eip155:8453")
-              amount: paymentRequirements.maxAmountRequired,
+              amount: paymentRequirements.amount ?? paymentRequirements.maxAmountRequired,
             },
           }),
         });
@@ -181,7 +181,7 @@ function normalizeLocalhost(url: string): string {
 }
 
 /** Reverse CAIP-2 → friendly network name. Returns original string if not found. */
-function fromCAIP2(caip2: string): string {
+export function fromCAIP2(caip2: string): string {
   for (const [name, config] of Object.entries(SUPPORTED_NETWORKS)) {
     if (`eip155:${config.chainId}` === caip2) return name;
     if (name === "solana" && caip2 === "solana:mainnet-beta") return name;

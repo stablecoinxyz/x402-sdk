@@ -4,7 +4,10 @@
 
 export interface PaymentRequirement {
   scheme: "exact" | "upto";
-  network: string;
+  network: string; // CAIP-2 for EVM ("eip155:8453"); friendly name for Solana
+  /** x402 v2 amount, atomic units. Present on EVM requirements. */
+  amount?: string;
+  /** Same value as `amount`; kept for readers of the older field. */
   maxAmountRequired: string; // atomic units (e.g., "1000000" for 1 USDC)
   resource: string; // URL of the resource
   description?: string;
@@ -12,8 +15,9 @@ export interface PaymentRequirement {
   payTo: string; // recipient address
   asset: string; // token contract address
   maxTimeoutSeconds: number;
-  facilitator?: string; // facilitator address for EIP-712 domain
+  facilitator?: string; // ERC-2612 spender; Solana only now (EVM settles through Permit2)
   extra?: {
+    assetTransferMethod?: "permit2";
     name?: string; // token name for EIP-712
     version?: string; // token version for EIP-712
   };
@@ -78,6 +82,11 @@ export interface PaymentPayload {
   accepted: {
     network: string; // CAIP-2
     scheme: string;  // "exact"
+    /** Echoed from the offer by v2 buyers; used to tell same-network offers apart. */
+    amount?: string;
+    asset?: string;
+    payTo?: string;
+    extra?: PaymentRequirement["extra"];
   };
   payload: PaymentPayloadInner;
 }
@@ -90,6 +99,8 @@ export interface VerifyRequest {
 export interface VerifyResponse {
   isValid: boolean;
   invalidReason?: string;
+  /** Payer address as the facilitator recovered it. */
+  payer?: string;
 }
 
 export interface SettleRequest {
@@ -134,4 +145,18 @@ export interface NetworkConfig {
   explorerUrl?: string;
   decimals: number;
   tokenName: string; // EIP-712 domain name (must match token's on-chain name())
+  /**
+   * EVM tokens the paywall can price in without the seller naming the EIP-712 domain.
+   * Permit2 requirements carry each token's `name` and `version`, and the facilitator
+   * requires the buyer's echoed offer to match them exactly.
+   */
+  tokens?: EvmTokenInfo[];
+}
+
+export interface EvmTokenInfo {
+  address: string;
+  /** EIP-712 domain name: the token's on-chain `name()`. */
+  name: string;
+  /** EIP-712 domain version. */
+  version: string;
 }

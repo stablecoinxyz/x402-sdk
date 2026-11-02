@@ -13,7 +13,7 @@
  */
 
 import { FacilitatorClient } from "../core/facilitator.js";
-import { SUPPORTED_NETWORKS, toCAIP2 } from "../core/networks.js";
+import { buildRequirement, matchRequirement, resolvePayer, resolveRequirement, type ResolvedRequirement } from "../core/requirements.js";
 import type { PaymentPayload, PaymentRequirementsResponse, PaymentRequirement } from "../core/types.js";
 
 export interface WithX402Options {
@@ -25,6 +25,10 @@ export interface WithX402Options {
   network: string;
   /** Token contract address. Defaults to network's default asset. */
   asset?: string;
+  /** EIP-712 domain name of `asset`. Only needed for an EVM token this SDK does not list. */
+  tokenName?: string;
+  /** EIP-712 domain version of `asset`. Only needed for an EVM token this SDK does not list. */
+  tokenVersion?: string;
   /** Human-readable description. */
   description?: string;
   /** Override facilitator URL. */
@@ -40,7 +44,7 @@ type NextRouteHandler = (request: Request, context?: unknown) => Promise<Respons
 
 interface ResolvedEntry {
   opt: WithX402Options & { settle: boolean };
-  asset: string;
+  resolved: ResolvedRequirement;
   facilitator: FacilitatorClient;
 }
 
@@ -52,13 +56,9 @@ export function paywall(opts: WithX402Options | WithX402Options[], handler: Next
 
   // Validate all networks upfront and build resolved entries
   const entries: ResolvedEntry[] = optArray.map((opt) => {
-    const networkConfig = SUPPORTED_NETWORKS[opt.network];
-    if (!networkConfig) {
-      throw new Error(`withX402: unsupported network "${opt.network}"`);
-    }
     return {
       opt: { ...opt, settle: opt.settle !== false },
-      asset: opt.asset ?? networkConfig.defaultAsset,
+      resolved: resolveRequirement(opt, "withX402"),
       facilitator: new FacilitatorClient({ facilitatorUrl: opt.facilitatorUrl, fetchFn: opt.fetchFn }),
     };
   });
@@ -81,19 +81,21 @@ export function paywall(opts: WithX402Options | WithX402Options[], handler: Next
 
     // Match payment to requirement by CAIP-2 network
     const paymentNetwork = paymentPayload.accepted?.network;
-    const matched = entries.find(({ opt }) => toCAIP2(opt.network) === paymentNetwork);
+    const matched = matchRequirement(entries, paymentPayload.accepted);
 
     if (!matched) {
       return build402Response(
         request.url,
         entries,
-        `No payment option found for network "${paymentNetwork}"`
+        `No payment option on network "${paymentNetwork}" matches the offer in the payment`
       );
     }
 
-    const { opt, asset, facilitator } = matched;
-    const requirement = buildRequirement(request.url, opt.payTo, opt.amount, asset, opt.network, opt.description);
+    const { opt, resolved, facilitator } = matched;
+    const requirement = buildRequirement(request.url, resolved);
 
+    let enrichedRequest: Request;
+    const responseHeaders = new Headers();
     try {
       // Verify
       const verifyResult = await facilitator.verify(paymentPayload, requirement);
@@ -102,12 +104,18 @@ export function paywall(opts: WithX402Options | WithX402Options[], handler: Next
       }
 
       // Settle
-      const responseHeaders = new Headers();
       if (opt.settle) {
         const settleResult = await facilitator.settle(paymentPayload, requirement);
         if (!settleResult.success) {
+          // A hash here (settlement_pending, duplicate_settlement) means money may have moved:
+          // hand it to the buyer so they check it instead of signing a second payment.
+          const tx = settleResult.txHash ?? settleResult.transaction;
           return Response.json(
-            { error: `Payment settlement failed: ${settleResult.error ?? settleResult.errorReason}` },
+            {
+              error: `Payment settlement failed: ${settleResult.error ?? settleResult.errorReason}`,
+              ...(settleResult.errorReason ? { errorReason: settleResult.errorReason } : {}),
+              ...(tx ? { transaction: tx } : {}),
+            },
             { status: 402 }
           );
         }
@@ -121,13 +129,15 @@ export function paywall(opts: WithX402Options | WithX402Options[], handler: Next
         }
       }
 
-      // Attach payment metadata as headers so the handler can read them
-      const inner = paymentPayload.payload as Record<string, any>;
-      const payer =
-        inner?.authorization?.from ||
-        inner?.from ||
-        "unknown";
+      // Attach payment metadata as headers so the handler can read them. Incoming
+      // x-payment-* headers are the buyer's and are dropped first, so none can be forged.
+      const payer = resolvePayer(verifyResult.payer, paymentPayload.payload);
       const enrichedHeaders = new Headers(request.headers);
+      const forged: string[] = [];
+      enrichedHeaders.forEach((_value, name) => {
+        if (name.toLowerCase().startsWith("x-payment-")) forged.push(name);
+      });
+      for (const name of forged) enrichedHeaders.delete(name);
       enrichedHeaders.set("x-payment-payer", payer);
       enrichedHeaders.set("x-payment-network", opt.network);
       enrichedHeaders.set("x-payment-amount", opt.amount);
@@ -140,42 +150,41 @@ export function paywall(opts: WithX402Options | WithX402Options[], handler: Next
         } catch {}
       }
 
-      const enrichedRequest = new Request(request.url, {
+      enrichedRequest = new Request(request.url, {
         method: request.method,
         headers: enrichedHeaders,
         body: request.body,
         // @ts-expect-error duplex needed for streaming bodies
         duplex: "half",
       });
-
-      // Call the original handler
-      const handlerResponse = await handler(enrichedRequest, context);
-
-      // Merge PAYMENT-RESPONSE header into the handler's response
-      if (responseHeaders.has("PAYMENT-RESPONSE")) {
-        const newHeaders = new Headers(handlerResponse.headers);
-        newHeaders.set("PAYMENT-RESPONSE", responseHeaders.get("PAYMENT-RESPONSE")!);
-        return new Response(handlerResponse.body, {
-          status: handlerResponse.status,
-          statusText: handlerResponse.statusText,
-          headers: newHeaders,
-        });
-      }
-
-      return handlerResponse;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return Response.json({ error: `Payment processing failed: ${message}` }, { status: 402 });
     }
+
+    // The handler runs outside the payment try: once settled, a handler error is the
+    // handler's own error (a 500 from Next.js), never a 402 that invites a second payment.
+    const handlerResponse = await handler(enrichedRequest, context);
+
+    // Merge PAYMENT-RESPONSE header into the handler's response
+    if (responseHeaders.has("PAYMENT-RESPONSE")) {
+      const newHeaders = new Headers(handlerResponse.headers);
+      newHeaders.set("PAYMENT-RESPONSE", responseHeaders.get("PAYMENT-RESPONSE")!);
+      return new Response(handlerResponse.body, {
+        status: handlerResponse.status,
+        statusText: handlerResponse.statusText,
+        headers: newHeaders,
+      });
+    }
+
+    return handlerResponse;
   };
 }
 
 // ---- Helpers ----
 
 function buildRequirements(resource: string, entries: ResolvedEntry[]): PaymentRequirement[] {
-  return entries.map(({ opt, asset }) =>
-    buildRequirement(resource, opt.payTo, opt.amount, asset, opt.network, opt.description)
-  );
+  return entries.map(({ resolved }) => buildRequirement(resource, resolved));
 }
 
 function build402Response(
@@ -201,28 +210,6 @@ function build402Response(
   );
 }
 
-function buildRequirement(
-  resource: string,
-  payTo: string,
-  amount: string,
-  asset: string,
-  network: string,
-  description?: string
-): PaymentRequirement {
-  const networkConfig = SUPPORTED_NETWORKS[network];
-  return {
-    scheme: "exact",
-    network,
-    maxAmountRequired: amount,
-    resource,
-    description,
-    payTo,
-    asset,
-    maxTimeoutSeconds: 300,
-    facilitator: networkConfig?.facilitatorAddress,
-    extra: networkConfig?.tokenName ? { name: networkConfig.tokenName } : undefined,
-  };
-}
 
 function toBase64(str: string): string {
   if (typeof Buffer !== "undefined") {

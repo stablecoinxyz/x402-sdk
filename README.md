@@ -230,9 +230,13 @@ type PaymentResult = {
 | `payTo` | `string` | required | Recipient address |
 | `amount` | `string` | required | Amount in atomic units |
 | `network` | `string` | required | Network key (e.g. `'base'`) |
-| `asset` | `string` | network SBC | Override token contract address |
+| `asset` | `string` | network SBC | Override token contract address. SBC on every EVM network and USDC on Base / Base Sepolia are known; any other EVM token needs `tokenName` and `tokenVersion` |
+| `tokenName` | `string` | known token | EIP-712 domain name of `asset` (its on-chain `name()`) |
+| `tokenVersion` | `string` | known token | EIP-712 domain version of `asset` |
 | `facilitatorUrl` | `string` | hosted | Override facilitator endpoint |
-| `settle` | `boolean` | `true` | Set `false` to verify-only (skip on-chain settlement) |
+| `settle` | `boolean` | `true` | Set `false` to verify-only (skip on-chain settlement). Not allowed on EVM networks: verify does not consume the Permit2 nonce, so one signed payment would pass verify forever |
+
+On EVM networks the 402 offer is the x402 v2 Permit2 shape the SBC facilitator settles: CAIP-2 `network` (e.g. `eip155:8453`), `amount`, and `extra: { assetTransferMethod: "permit2", name, version }`. `maxAmountRequired` is still sent with the same value. Solana offers are unchanged. Several offers on one network (e.g. SBC and USDC on Base) are matched to the payment by the asset, `payTo` and amount the buyer echoes back. Buyers on the SBC agent platform currently read only the first offer and pay only SBC, so list an EVM SBC offer first if you want them to pay.
 
 ### Signer adapters — `/evm`
 
