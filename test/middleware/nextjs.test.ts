@@ -63,7 +63,7 @@ describe("withX402 — missing payment header → 402", () => {
     const header = res.headers.get("PAYMENT-REQUIRED");
     expect(header).not.toBeNull();
     const decoded = JSON.parse(fromBase64(header!));
-    expect(decoded.accepts[0].network).toBe(NETWORK);
+    expect(decoded.accepts[0].network).toBe("eip155:84532");
     expect(decoded.accepts[0].payTo).toBe(PAY_TO);
   });
 

@@ -58,7 +58,7 @@ export class FacilitatorClient {
             paymentRequirements: {
               ...paymentRequirements,
               network: paymentPayload.accepted.network, // always CAIP-2 (e.g. "eip155:8453")
-              amount: paymentRequirements.maxAmountRequired,
+              amount: paymentRequirements.amount ?? paymentRequirements.maxAmountRequired,
             },
           }),
         });
@@ -97,7 +97,7 @@ export class FacilitatorClient {
             paymentRequirements: {
               ...paymentRequirements,
               network: paymentPayload.accepted.network, // always CAIP-2 (e.g. "eip155:8453")
-              amount: paymentRequirements.maxAmountRequired,
+              amount: paymentRequirements.amount ?? paymentRequirements.maxAmountRequired,
             },
           }),
         });

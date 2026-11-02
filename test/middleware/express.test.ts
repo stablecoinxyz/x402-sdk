@@ -90,7 +90,7 @@ describe("x402Middleware — missing payment header → 402", () => {
     expect(Array.isArray(decoded.accepts)).toBe(true);
     expect(decoded.accepts[0].payTo).toBe(PAY_TO);
     expect(decoded.accepts[0].maxAmountRequired).toBe(AMOUNT);
-    expect(decoded.accepts[0].network).toBe(NETWORK);
+    expect(decoded.accepts[0].network).toBe("eip155:84532");
   });
 
   it("402 JSON body includes x402Version and accepts array", async () => {
@@ -104,7 +104,7 @@ describe("x402Middleware — missing payment header → 402", () => {
   });
 
   it("uses custom asset if provided", async () => {
-    const customAsset = "0xcustom";
+    const customAsset = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; // USDC on Base Sepolia
     const middleware = x402Middleware({ payTo: PAY_TO, amount: AMOUNT, network: NETWORK, asset: customAsset });
     const res = makeRes();
     await middleware(makeReq(), res, makeNext());
@@ -112,6 +112,7 @@ describe("x402Middleware — missing payment header → 402", () => {
     const header = res._headers()["PAYMENT-REQUIRED"];
     const decoded = JSON.parse(fromBase64(header));
     expect(decoded.accepts[0].asset).toBe(customAsset);
+    expect(decoded.accepts[0].extra).toEqual({ assetTransferMethod: "permit2", name: "USDC", version: "2" });
   });
 
   it("scheme in requirement is 'exact'", async () => {
@@ -277,7 +278,7 @@ describe("x402Middleware — multi-network (array input)", () => {
     expect(res._status()).toBe(402);
     const decoded = JSON.parse(fromBase64(res._headers()["PAYMENT-REQUIRED"]));
     expect(decoded.accepts).toHaveLength(2);
-    expect(decoded.accepts[0].network).toBe("base-sepolia");
+    expect(decoded.accepts[0].network).toBe("eip155:84532");
     expect(decoded.accepts[1].network).toBe("solana-devnet");
   });
 

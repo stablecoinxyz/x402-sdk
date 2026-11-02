@@ -6,6 +6,11 @@
 
 import type { NetworkConfig } from "./types.js";
 
+// EIP-712 domains, matching the facilitator's token table (`resolveToken` in x402-facilitator
+// src/config.ts). Names are each contract's on-chain name(). SBC exposes no version(); "1" is
+// the domain version the facilitator and the agent platform sign with.
+const SBC_DOMAIN = { name: "Stable Coin", version: "1" };
+
 export const SUPPORTED_NETWORKS: Record<string, NetworkConfig> = {
   base: {
     chainId: 8453,
@@ -17,6 +22,10 @@ export const SUPPORTED_NETWORKS: Record<string, NetworkConfig> = {
     explorerUrl: "https://basescan.org",
     decimals: 18,
     tokenName: "Stable Coin",
+    tokens: [
+      { address: "0xfdcC3dd6671eaB0709A4C0f3F53De9a333d80798", ...SBC_DOMAIN },
+      { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", name: "USD Coin", version: "2" },
+    ],
   },
   "base-sepolia": {
     chainId: 84532,
@@ -28,6 +37,10 @@ export const SUPPORTED_NETWORKS: Record<string, NetworkConfig> = {
     explorerUrl: "https://sepolia.basescan.org",
     decimals: 6,
     tokenName: "Stable Coin",
+    tokens: [
+      { address: "0xf9FB20B8E097904f0aB7d12e9DbeE88f2dcd0F16", ...SBC_DOMAIN },
+      { address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e", name: "USDC", version: "2" },
+    ],
   },
   radius: {
     chainId: 723487,
@@ -39,6 +52,9 @@ export const SUPPORTED_NETWORKS: Record<string, NetworkConfig> = {
     explorerUrl: "https://network.radiustech.xyz",
     decimals: 6,
     tokenName: "Stable Coin",
+    tokens: [
+      { address: "0x33ad9e4bd16b69b5bfded37d8b5d9ff9aba014fb", ...SBC_DOMAIN },
+    ],
   },
   "radius-testnet": {
     chainId: 72344,
@@ -50,6 +66,9 @@ export const SUPPORTED_NETWORKS: Record<string, NetworkConfig> = {
     explorerUrl: "https://testnet.radiustech.xyz",
     decimals: 6,
     tokenName: "Stable Coin",
+    tokens: [
+      { address: "0x33ad9e4bd16b69b5bfded37d8b5d9ff9aba014fb", ...SBC_DOMAIN },
+    ],
   },
   solana: {
     chainId: 0, // Not applicable for Solana

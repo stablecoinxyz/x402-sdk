@@ -13,7 +13,7 @@
  */
 
 import { FacilitatorClient } from "../core/facilitator.js";
-import { SUPPORTED_NETWORKS, toCAIP2 } from "../core/networks.js";
+import { buildRequirement, resolvePayer, resolveRequirement, type ResolvedRequirement } from "../core/requirements.js";
 import type { PaymentPayload, PaymentRequirementsResponse, PaymentRequirement } from "../core/types.js";
 
 export interface WithX402Options {
@@ -25,6 +25,10 @@ export interface WithX402Options {
   network: string;
   /** Token contract address. Defaults to network's default asset. */
   asset?: string;
+  /** EIP-712 domain name of `asset`. Only needed for an EVM token this SDK does not list. */
+  tokenName?: string;
+  /** EIP-712 domain version of `asset`. Only needed for an EVM token this SDK does not list. */
+  tokenVersion?: string;
   /** Human-readable description. */
   description?: string;
   /** Override facilitator URL. */
@@ -40,7 +44,7 @@ type NextRouteHandler = (request: Request, context?: unknown) => Promise<Respons
 
 interface ResolvedEntry {
   opt: WithX402Options & { settle: boolean };
-  asset: string;
+  resolved: ResolvedRequirement;
   facilitator: FacilitatorClient;
 }
 
@@ -52,13 +56,9 @@ export function paywall(opts: WithX402Options | WithX402Options[], handler: Next
 
   // Validate all networks upfront and build resolved entries
   const entries: ResolvedEntry[] = optArray.map((opt) => {
-    const networkConfig = SUPPORTED_NETWORKS[opt.network];
-    if (!networkConfig) {
-      throw new Error(`withX402: unsupported network "${opt.network}"`);
-    }
     return {
       opt: { ...opt, settle: opt.settle !== false },
-      asset: opt.asset ?? networkConfig.defaultAsset,
+      resolved: resolveRequirement(opt, "withX402"),
       facilitator: new FacilitatorClient({ facilitatorUrl: opt.facilitatorUrl, fetchFn: opt.fetchFn }),
     };
   });
@@ -81,7 +81,7 @@ export function paywall(opts: WithX402Options | WithX402Options[], handler: Next
 
     // Match payment to requirement by CAIP-2 network
     const paymentNetwork = paymentPayload.accepted?.network;
-    const matched = entries.find(({ opt }) => toCAIP2(opt.network) === paymentNetwork);
+    const matched = entries.find(({ resolved }) => resolved.caip2 === paymentNetwork);
 
     if (!matched) {
       return build402Response(
@@ -91,8 +91,8 @@ export function paywall(opts: WithX402Options | WithX402Options[], handler: Next
       );
     }
 
-    const { opt, asset, facilitator } = matched;
-    const requirement = buildRequirement(request.url, opt.payTo, opt.amount, asset, opt.network, opt.description);
+    const { opt, resolved, facilitator } = matched;
+    const requirement = buildRequirement(request.url, resolved);
 
     try {
       // Verify
@@ -122,11 +122,7 @@ export function paywall(opts: WithX402Options | WithX402Options[], handler: Next
       }
 
       // Attach payment metadata as headers so the handler can read them
-      const inner = paymentPayload.payload as Record<string, any>;
-      const payer =
-        inner?.authorization?.from ||
-        inner?.from ||
-        "unknown";
+      const payer = resolvePayer(verifyResult.payer, paymentPayload.payload);
       const enrichedHeaders = new Headers(request.headers);
       enrichedHeaders.set("x-payment-payer", payer);
       enrichedHeaders.set("x-payment-network", opt.network);
@@ -173,9 +169,7 @@ export function paywall(opts: WithX402Options | WithX402Options[], handler: Next
 // ---- Helpers ----
 
 function buildRequirements(resource: string, entries: ResolvedEntry[]): PaymentRequirement[] {
-  return entries.map(({ opt, asset }) =>
-    buildRequirement(resource, opt.payTo, opt.amount, asset, opt.network, opt.description)
-  );
+  return entries.map(({ resolved }) => buildRequirement(resource, resolved));
 }
 
 function build402Response(
@@ -201,28 +195,6 @@ function build402Response(
   );
 }
 
-function buildRequirement(
-  resource: string,
-  payTo: string,
-  amount: string,
-  asset: string,
-  network: string,
-  description?: string
-): PaymentRequirement {
-  const networkConfig = SUPPORTED_NETWORKS[network];
-  return {
-    scheme: "exact",
-    network,
-    maxAmountRequired: amount,
-    resource,
-    description,
-    payTo,
-    asset,
-    maxTimeoutSeconds: 300,
-    facilitator: networkConfig?.facilitatorAddress,
-    extra: networkConfig?.tokenName ? { name: networkConfig.tokenName } : undefined,
-  };
-}
 
 function toBase64(str: string): string {
   if (typeof Buffer !== "undefined") {
