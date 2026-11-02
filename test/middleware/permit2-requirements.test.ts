@@ -196,3 +196,74 @@ describe("misconfiguration fails at construction", () => {
     expect(() => x402Middleware({ ...base, amount: "0.5" })).toThrow(/amount/);
   });
 });
+
+describe("several offers on one network (SBC and USDC on Base)", () => {
+  const BASE_SBC = "0xfdcC3dd6671eaB0709A4C0f3F53De9a333d80798";
+  const BASE_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+  const opts = [
+    { payTo: PAY_TO, amount: "1000", network: "base" },
+    { payTo: PAY_TO, amount: "2000", network: "base", asset: BASE_USDC },
+  ];
+
+  it("forwards the requirements of the offer the buyer actually paid", async () => {
+    const offers = await offerFromExpress(opts);
+    const usdcOffer = offers.find((o) => o.asset === BASE_USDC)!;
+    const { fn, bodies } = recordingFetch();
+    const header = toBase64(JSON.stringify({ accepted: echo(usdcOffer), payload: { signature: "0x00" } }));
+    const next = vi.fn();
+    await x402Middleware(opts.map((o) => ({ ...o, fetchFn: fn })))(
+      { headers: { "x-payment": header }, url: "/premium", method: "GET" }, makeRes(), next
+    );
+    expect(next).toHaveBeenCalled();
+    expect(bodies.verify.paymentRequirements.asset).toBe(BASE_USDC);
+    expect(facilitatorAccepts(bodies.verify.paymentPayload.accepted, bodies.verify.paymentRequirements)).toBe(true);
+  });
+
+  it("refuses a payment that matches no offer on the network instead of guessing", async () => {
+    const { fn } = recordingFetch();
+    const header = toBase64(JSON.stringify({
+      accepted: { scheme: "exact", network: "eip155:8453", asset: "0x" + "77".repeat(20), payTo: PAY_TO, amount: "1000" },
+      payload: { signature: "0x00" },
+    }));
+    const res = makeRes();
+    await x402Middleware(opts.map((o) => ({ ...o, fetchFn: fn })))(
+      { headers: { "x-payment": header }, url: "/premium", method: "GET" }, res, vi.fn()
+    );
+    expect(res._status()).toBe(402);
+    expect(fn).not.toHaveBeenCalled();
+  });
+});
+
+describe("Next.js round trip", () => {
+  it("forwards matching requirements and hands the handler the facilitator's payer", async () => {
+    const opts = { payTo: PAY_TO, amount: "1000", network: "radius-testnet" };
+    const probe = withX402(opts, async () => new Response("ok"));
+    const [offer] = JSON.parse(fromBase64((await probe(new Request("https://api.example.com/p"))).headers.get("PAYMENT-REQUIRED")!)).accepts;
+    const { fn, bodies } = recordingFetch({ isValid: true, payer: BUYER });
+    let seenPayer: string | null = null;
+    const handler = withX402({ ...opts, fetchFn: fn }, async (req) => {
+      seenPayer = req.headers.get("x-payment-payer");
+      return new Response("ok");
+    });
+    const header = toBase64(JSON.stringify({
+      accepted: echo(offer),
+      payload: { signature: "0x00", permit2Authorization: { from: "0x1111111111111111111111111111111111111111" } },
+    }));
+    const res = await handler(new Request("https://api.example.com/p", { headers: { "x-payment": header } }));
+    expect(res.status).toBe(200);
+    expect(facilitatorAccepts(bodies.settle.paymentPayload.accepted, bodies.settle.paymentRequirements)).toBe(true);
+    expect(seenPayer).toBe(BUYER);
+  });
+});
+
+describe("more construction checks", () => {
+  it("rejects the zero address as payTo", () => {
+    expect(() => x402Middleware({ payTo: "0x" + "0".repeat(40), amount: "1000", network: "base" })).toThrow(/payTo/);
+  });
+
+  it("rejects EVM token options on a Solana entry", () => {
+    expect(() =>
+      x402Middleware({ payTo: "2mSjKVjzRGXcipq3DdJCijbepugfNSJCN1yVN2tgdw5K", amount: "1", network: "solana", tokenName: "X", tokenVersion: "1" })
+    ).toThrow(/EVM networks only/);
+  });
+});

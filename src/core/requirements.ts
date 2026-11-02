@@ -63,10 +63,15 @@ export function resolveRequirement(opt: RequirementOptions, label: string): Reso
     asset,
     description: opt.description,
   };
-  if (!isEvmNetwork(opt.network)) return base;
+  if (!isEvmNetwork(opt.network)) {
+    if (opt.tokenName !== undefined || opt.tokenVersion !== undefined) {
+      throw new Error(`${label}: tokenName/tokenVersion apply to EVM networks only, not ${opt.network}`);
+    }
+    return base;
+  }
 
-  if (!EVM_ADDRESS.test(opt.payTo)) {
-    throw new Error(`${label}: payTo must be a 0x-prefixed 20-byte address on ${opt.network}`);
+  if (!EVM_ADDRESS.test(opt.payTo) || /^0x0{40}$/.test(opt.payTo)) {
+    throw new Error(`${label}: payTo must be a non-zero 0x-prefixed 20-byte address on ${opt.network}`);
   }
   if (!ATOMIC_AMOUNT.test(opt.amount)) {
     throw new Error(`${label}: amount must be a positive integer string in atomic units`);
@@ -93,6 +98,27 @@ export function resolveRequirement(opt: RequirementOptions, label: string): Reso
     );
   }
   return { ...base, token: { name: known.name, version: known.version } };
+}
+
+/**
+ * Pick the paywall entry a payment is for. Network alone is not enough: one network can
+ * carry several offers (SBC and USDC on Base). The buyer's echoed `accepted` names the
+ * asset and payTo; an entry whose fields contradict the echo is never chosen, so the
+ * facilitator is never handed requirements for a different offer than the one signed.
+ */
+export function matchRequirement<T extends { resolved: ResolvedRequirement }>(
+  entries: T[],
+  accepted: { network?: unknown; asset?: unknown; payTo?: unknown; amount?: unknown } | undefined
+): T | undefined {
+  const onNetwork = entries.filter((e) => e.resolved.caip2 === accepted?.network);
+  if (onNetwork.length <= 1) return onNetwork[0];
+  const same = (a: unknown, b: string) => typeof a === "string" && a.toLowerCase() === b.toLowerCase();
+  return onNetwork.find(
+    (e) =>
+      same(accepted?.asset, e.resolved.asset) &&
+      same(accepted?.payTo, e.resolved.payTo) &&
+      (accepted?.amount === undefined || accepted.amount === e.resolved.amount)
+  );
 }
 
 /** The `accepts[]` entry for one resolved option. */
@@ -129,7 +155,8 @@ export function buildRequirement(resource: string, r: ResolvedRequirement): Paym
 
 /**
  * The payer to report to the handler: the facilitator's recovered payer first, then the
- * legacy payload fields. A Permit2 payload has no `authorization.from`.
+ * legacy payload fields. A Permit2 payload has no `authorization.from`. The fallback is
+ * whatever the buyer wrote in the payload and is not signature-checked.
  */
 export function resolvePayer(verifyPayer: string | undefined, inner: unknown): string {
   if (verifyPayer && verifyPayer !== "unknown") return verifyPayer;

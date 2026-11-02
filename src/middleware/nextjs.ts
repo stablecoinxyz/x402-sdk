@@ -13,7 +13,7 @@
  */
 
 import { FacilitatorClient } from "../core/facilitator.js";
-import { buildRequirement, resolvePayer, resolveRequirement, type ResolvedRequirement } from "../core/requirements.js";
+import { buildRequirement, matchRequirement, resolvePayer, resolveRequirement, type ResolvedRequirement } from "../core/requirements.js";
 import type { PaymentPayload, PaymentRequirementsResponse, PaymentRequirement } from "../core/types.js";
 
 export interface WithX402Options {
@@ -81,13 +81,13 @@ export function paywall(opts: WithX402Options | WithX402Options[], handler: Next
 
     // Match payment to requirement by CAIP-2 network
     const paymentNetwork = paymentPayload.accepted?.network;
-    const matched = entries.find(({ resolved }) => resolved.caip2 === paymentNetwork);
+    const matched = matchRequirement(entries, paymentPayload.accepted);
 
     if (!matched) {
       return build402Response(
         request.url,
         entries,
-        `No payment option found for network "${paymentNetwork}"`
+        `No payment option on network "${paymentNetwork}" matches the offer in the payment`
       );
     }
 

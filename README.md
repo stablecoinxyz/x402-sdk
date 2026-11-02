@@ -236,7 +236,7 @@ type PaymentResult = {
 | `facilitatorUrl` | `string` | hosted | Override facilitator endpoint |
 | `settle` | `boolean` | `true` | Set `false` to verify-only (skip on-chain settlement) |
 
-On EVM networks the 402 offer is the x402 v2 Permit2 shape the SBC facilitator settles: CAIP-2 `network` (e.g. `eip155:8453`), `amount`, and `extra: { assetTransferMethod: "permit2", name, version }`. `maxAmountRequired` is still sent with the same value. Solana offers are unchanged.
+On EVM networks the 402 offer is the x402 v2 Permit2 shape the SBC facilitator settles: CAIP-2 `network` (e.g. `eip155:8453`), `amount`, and `extra: { assetTransferMethod: "permit2", name, version }`. `maxAmountRequired` is still sent with the same value. Solana offers are unchanged. Several offers on one network (e.g. SBC and USDC on Base) are matched to the payment by the asset, `payTo` and amount the buyer echoes back. Buyers on the SBC agent platform currently read only the first offer and pay only SBC, so list an EVM SBC offer first if you want them to pay.
 
 ### Signer adapters — `/evm`
 

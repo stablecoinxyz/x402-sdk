@@ -82,6 +82,11 @@ export interface PaymentPayload {
   accepted: {
     network: string; // CAIP-2
     scheme: string;  // "exact"
+    /** Echoed from the offer by v2 buyers; used to tell same-network offers apart. */
+    amount?: string;
+    asset?: string;
+    payTo?: string;
+    extra?: PaymentRequirement["extra"];
   };
   payload: PaymentPayloadInner;
 }
