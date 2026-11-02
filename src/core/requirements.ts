@@ -224,8 +224,10 @@ export function resolvePayer(verifyPayer: string | undefined, inner: unknown): s
  * - `duplicate_settlement`: this exact signed transaction already executed on chain. 409 with
  *   the digest, and the resource is NOT served: the facilitator reports a given payment's
  *   success at most once, so serving here would let anyone holding a copy of a paid header
- *   replay it for free. The cost is that a settle the SDK itself retried after a dropped
- *   connection also lands here; the digest lets the buyer prove that payment.
+ *   replay it for free. The SDK never retries a Sui settle (FacilitatorClient.settle), so
+ *   this is someone else's submit of the same signed bytes, or the facilitator relabeling a
+ *   broadcast whose receipt it lost (x402-facilitator src/routes/settle.ts). In that last
+ *   case the honest buyer is refused; the digest lets them prove the payment.
  */
 export function suiUnsettledReply(
   network: string,
@@ -254,4 +256,21 @@ export function suiUnsettledReply(
 export function suiSettleErrorReply(network: string, message: string): { status: number; body: Record<string, unknown> } | undefined {
   if (!isSuiNetwork(network)) return undefined;
   return { status: 504, body: { error: "settlement_unknown", detail: message, outcome: "unknown" } };
+}
+
+/** The facilitator's /verify reason for a Sui transaction that already executed on chain. */
+export const SUI_ALREADY_EXECUTED = "invalid_exact_sui_payload_already_executed";
+
+/**
+ * The reply for a Sui /verify refusal that means the money already moved, or undefined when
+ * the usual 402 applies. /verify refuses a transaction that already executed; a 402 would tell
+ * a buyer who is retrying after a lost response to sign and pay again. 409, resource not
+ * served, for the same reason as `duplicate_settlement` in `suiUnsettledReply`.
+ */
+export function suiVerifyRejectReply(
+  network: string,
+  result: { invalidReason?: string }
+): { status: number; body: Record<string, unknown> } | undefined {
+  if (!isSuiNetwork(network) || result.invalidReason !== SUI_ALREADY_EXECUTED) return undefined;
+  return { status: 409, body: { error: "Payment already settled", reason: SUI_ALREADY_EXECUTED } };
 }

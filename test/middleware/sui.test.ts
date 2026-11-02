@@ -278,3 +278,51 @@ describe("Sui settlement outcomes never answer 402 once money may have moved", (
     expect(next).not.toHaveBeenCalled();
   });
 });
+
+describe("Sui: a payment that already landed is never answered 402", () => {
+  // /verify refuses a transaction that already executed. A 402 there would tell a buyer
+  // whose money already moved to sign and pay again.
+  const executed = {
+    isValid: false,
+    payer: SUI_BUYER,
+    invalidReason: "invalid_exact_sui_payload_already_executed",
+    invalidMessage: `transaction ${DIGEST} already executed`,
+  };
+
+  it("express: verify already_executed → 409, handler not run", async () => {
+    const { res, next } = await payExpress({ success: true, transaction: DIGEST }, executed);
+    expect(res._status()).toBe(409);
+    expect(res._body()).toMatchObject({ reason: "invalid_exact_sui_payload_already_executed" });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("nextjs: verify already_executed → 409, handler not run", async () => {
+    const { res, handler } = await payNext({ success: true, transaction: DIGEST }, executed);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ reason: "invalid_exact_sui_payload_already_executed" });
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("express: any other verify failure stays 402", async () => {
+    const { res } = await payExpress({ success: true, transaction: DIGEST }, { isValid: false, payer: "", invalidReason: "invalid_exact_sui_payload_signature" });
+    expect(res._status()).toBe(402);
+  });
+});
+
+describe("Sui settle is sent once, never retried", () => {
+  it("a retryable-looking network error on settle is not retried: one settle call, 504", async () => {
+    let settleCalls = 0;
+    const fetchFn = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : (input as URL).href;
+      if (url.endsWith("/verify")) return makeFetchResponse(200, { isValid: true, payer: SUI_BUYER });
+      settleCalls++;
+      throw new Error("read ECONNRESET");
+    });
+    const offer = await expressOffer(suiOpts());
+    const mw = x402Middleware(suiOpts({ fetchFn }) as any);
+    const res = makeRes();
+    await mw({ headers: { "x-payment": paymentHeader(offer) }, url: "/premium", method: "GET" } as any, res, vi.fn());
+    expect(settleCalls).toBe(1);
+    expect(res._status()).toBe(504);
+  });
+});

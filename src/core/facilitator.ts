@@ -114,7 +114,9 @@ export class FacilitatorClient {
         }
       },
       "Facilitator settle",
-      { maxAttempts: 3 }
+      // Never retry a Sui settle: a resubmit of bytes that may already have executed
+      // only produces duplicate_settlement. A failed call becomes "outcome unknown" (504).
+      { maxAttempts: paymentPayload.accepted.network.startsWith("sui:") ? 1 : 3 }
     );
   }
 

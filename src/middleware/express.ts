@@ -20,6 +20,7 @@ import {
   resolveRequirement,
   suiSettleErrorReply,
   suiUnsettledReply,
+  suiVerifyRejectReply,
   type ResolvedRequirement,
 } from "../core/requirements.js";
 import type {
@@ -129,6 +130,8 @@ export function paywall(opts: X402MiddlewareOptions | X402MiddlewareOptions[]) {
       verifiedPayer = verifyResult.payer;
       console.log("[x402] verify →", JSON.stringify(verifyResult));
       if (!verifyResult.isValid) {
+        const rejected = suiVerifyRejectReply(opt.network, verifyResult);
+        if (rejected) return res.status(rejected.status).json(rejected.body);
         return send402(res, buildRequirements(req.url, entries), verifyResult.invalidReason);
       }
 

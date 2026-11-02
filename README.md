@@ -191,7 +191,8 @@ Once a Sui transaction may have been broadcast, the middleware never answers 402
 | settled | handler's response, `PAYMENT-RESPONSE` header with the digest | yes |
 | `settlement_pending` (broadcast, outcome not yet known) | `202 { pending: true, payment: { txHash } }` | no |
 | `duplicate_settlement` (this signed transaction already executed) | `409 { reason: "duplicate_settlement", payment: { txHash } }` | no |
-| settle call failed (timeout, dropped connection) | `504 { error: "settlement_unknown", outcome: "unknown" }` | no |
+| settle call failed (timeout, dropped connection); a Sui settle is never retried | `504 { error: "settlement_unknown", outcome: "unknown" }` | no |
+| verify says the transaction already executed (a retry after the money moved) | `409 { reason: "invalid_exact_sui_payload_already_executed" }` | no |
 | any other failure | `402` | no |
 
 A duplicate is not served because the facilitator reports each payment's success once; serving it would let a copied payment header be replayed for free.
