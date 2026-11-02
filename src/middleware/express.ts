@@ -18,8 +18,8 @@ import {
   matchRequirement,
   resolvePayer,
   resolveRequirement,
-  suiSettleErrorReply,
-  suiUnsettledReply,
+  settleErrorReply,
+  unsettledReply,
   suiVerifyRejectReply,
   type ResolvedRequirement,
 } from "../core/requirements.js";
@@ -141,16 +141,14 @@ export function paywall(opts: X402MiddlewareOptions | X402MiddlewareOptions[]) {
         try {
           settleResult = await facilitator.settle(paymentPayload, requirement);
         } catch (err) {
-          const reply = suiSettleErrorReply(opt.network, err instanceof Error ? err.message : String(err));
-          if (reply) return res.status(reply.status).json(reply.body);
-          throw err;
+          const reply = settleErrorReply(err instanceof Error ? err.message : String(err));
+          return res.status(reply.status).json(reply.body);
         }
         console.log("[x402] settle →", JSON.stringify(settleResult));
         if (!settleResult.success) {
-          const unsettled = suiUnsettledReply(opt.network, settleResult);
+          const unsettled = unsettledReply(settleResult);
           if (unsettled) return res.status(unsettled.status).json(unsettled.body);
-          // A hash here (settlement_pending, duplicate_settlement) means money may have moved:
-          // hand it to the buyer so they check it instead of signing a second payment.
+          // Terminal (e.g. mined and reverted): no money moved. Any hash is evidence of that.
           const tx = settleResult.txHash ?? settleResult.transaction;
           return res.status(402).json({
             error: `Payment settlement failed: ${settleResult.error ?? settleResult.errorReason}`,

@@ -68,23 +68,79 @@ describe("a payment that does not echo this route's offer", () => {
   }
 });
 
-describe("settlement that may have moved money", () => {
-  it("Express: returns the transaction and reason with the 402", async () => {
-    const fn = facilitator({ success: false, errorReason: "settlement_pending", transaction: TX });
+describe("settlement that may have moved money is never answered 402", () => {
+  // The facilitator answers settlement_pending when it broadcast the transfer but could not
+  // read the outcome (x402-facilitator src/routes/settle.ts, the settlementPending branch).
+  // A 402 there tells the buyer to sign a fresh permit: a second payment if the first lands.
+  const pending = { success: false, errorReason: "settlement_pending", transaction: TX };
+
+  it("Express: settlement_pending → 202 with the transaction, handler not run", async () => {
     const res = makeRes();
+    const next = vi.fn();
+    await x402Middleware({ ...OPTS, fetchFn: facilitator(pending) })(
+      { headers: { "x-payment": header(goodAccepted) }, url: "/p", method: "GET" }, res, next
+    );
+    expect(res._status()).toBe(202);
+    expect(res._body()).toMatchObject({ pending: true, reason: "settlement_pending", payment: { txHash: TX } });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("Next.js: settlement_pending → 202 with the transaction, handler not run", async () => {
+    const route = vi.fn(async () => new Response("ok"));
+    const handler = withX402({ ...OPTS, fetchFn: facilitator(pending) }, route);
+    const res = await handler(new Request("https://a.test/p", { headers: { "x-payment": header(goodAccepted) } }));
+    expect(res.status).toBe(202);
+    expect(await res.json()).toMatchObject({ pending: true, payment: { txHash: TX } });
+    expect(route).not.toHaveBeenCalled();
+  });
+
+  it("Solana: settlement_pending → 202 as well", async () => {
+    const sol = { payTo: "2mSjKVjzRGXcipq3DdJCijbepugfNSJCN1yVN2tgdw5K", amount: "1000", network: "solana-devnet", asset: "So11111111111111111111111111111111111111112" };
+    const res = makeRes();
+    await x402Middleware({ ...sol, fetchFn: facilitator(pending) })(
+      { headers: { "x-payment": header({ scheme: "exact", network: "solana:devnet" }) }, url: "/p", method: "GET" }, res, vi.fn()
+    );
+    expect(res._status()).toBe(202);
+  });
+
+  it("Express: the settle call itself fails → 504 outcome unknown, sent once, handler not run", async () => {
+    let settleCalls = 0;
+    const fn = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : (input as URL).href;
+      if (url.endsWith("/verify")) return makeFetchResponse(200, { isValid: true, payer: "0x9999999999999999999999999999999999999999" });
+      settleCalls++;
+      throw new Error("read ECONNRESET");
+    });
+    const res = makeRes();
+    const next = vi.fn();
     await x402Middleware({ ...OPTS, fetchFn: fn })(
+      { headers: { "x-payment": header(goodAccepted) }, url: "/p", method: "GET" }, res, next
+    );
+    expect(settleCalls).toBe(1);
+    expect(res._status()).toBe(504);
+    expect(res._body()).toMatchObject({ outcome: "unknown" });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("Next.js: the settle call itself fails → 504 outcome unknown", async () => {
+    const fn = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : (input as URL).href;
+      if (url.endsWith("/verify")) return makeFetchResponse(200, { isValid: true, payer: "0x9999999999999999999999999999999999999999" });
+      throw new Error("socket hang up");
+    });
+    const handler = withX402({ ...OPTS, fetchFn: fn }, async () => new Response("ok"));
+    const res = await handler(new Request("https://a.test/p", { headers: { "x-payment": header(goodAccepted) } }));
+    expect(res.status).toBe(504);
+  });
+
+  it("a mined-and-reverted settlement is a definite no: still 402, with the transaction", async () => {
+    const reverted = { success: false, errorReason: "invalid_transaction_state", transaction: TX };
+    const res = makeRes();
+    await x402Middleware({ ...OPTS, fetchFn: facilitator(reverted) })(
       { headers: { "x-payment": header(goodAccepted) }, url: "/p", method: "GET" }, res, vi.fn()
     );
     expect(res._status()).toBe(402);
-    expect(res._body()).toMatchObject({ errorReason: "settlement_pending", transaction: TX });
-  });
-
-  it("Next.js: returns the transaction and reason with the 402", async () => {
-    const fn = facilitator({ success: false, errorReason: "settlement_pending", transaction: TX });
-    const handler = withX402({ ...OPTS, fetchFn: fn }, async () => new Response("ok"));
-    const res = await handler(new Request("https://a.test/p", { headers: { "x-payment": header(goodAccepted) } }));
-    expect(res.status).toBe(402);
-    expect(await res.json()).toMatchObject({ errorReason: "settlement_pending", transaction: TX });
+    expect(res._body()).toMatchObject({ errorReason: "invalid_transaction_state", transaction: TX });
   });
 });
 

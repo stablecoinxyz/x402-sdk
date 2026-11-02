@@ -184,14 +184,14 @@ app.get('/premium', paywall({ payTo: '0x<64 hex>', amount: '10000', network: 'su
 
 The 402 offer uses CAIP-2 `network` (`sui:mainnet` / `sui:testnet`), `amount`, and `extra: {}`; `maxAmountRequired` is still sent with the same value. `settle: false` is not allowed on Sui: verify only simulates the signed transaction, so one payment would pass verify until its epoch window closes. The buyer signs a gasless USDC transfer and the facilitator submits it, so neither the seller nor the SDK needs a Sui dependency. This SDK has no Sui buyer client; the SBC agent platform pays Sui sellers.
 
-Once a Sui transaction may have been broadcast, the middleware never answers 402, because a 402 invites the buyer to sign and pay again:
+Once a Sui transaction may have been broadcast, the middleware never answers 402, because a 402 invites the buyer to sign and pay again. The pending and settle-failed rows apply on every network (see [Settlement outcomes](#settlement-outcomes)):
 
 | Facilitator outcome | Response | Handler runs |
 |---|---|---|
 | settled | handler's response, `PAYMENT-RESPONSE` header with the digest | yes |
 | `settlement_pending` (broadcast, outcome not yet known) | `202 { pending: true, payment: { txHash } }` | no |
 | `duplicate_settlement` (this signed transaction already executed) | `409 { reason: "duplicate_settlement", payment: { txHash } }` | no |
-| settle call failed (timeout, dropped connection); a Sui settle is never retried | `504 { error: "settlement_unknown", outcome: "unknown" }` | no |
+| settle call failed (timeout, dropped connection) | `504 { error: "settlement_unknown", outcome: "unknown" }` | no |
 | verify says the transaction already executed (a retry after the money moved) | `409 { reason: "invalid_exact_sui_payload_already_executed" }` | no |
 | any other failure | `402` | no |
 
@@ -264,6 +264,10 @@ type PaymentResult = {
 | `settle` | `boolean` | `true` | Set `false` to verify-only (skip on-chain settlement). Not allowed on EVM networks: verify does not consume the Permit2 nonce, so one signed payment would pass verify forever |
 
 On EVM networks the 402 offer is the x402 v2 Permit2 shape the SBC facilitator settles: CAIP-2 `network` (e.g. `eip155:8453`), `amount`, and `extra: { assetTransferMethod: "permit2", name, version }`. `maxAmountRequired` is still sent with the same value. Solana offers are unchanged. Several offers on one network (e.g. SBC and USDC on Base) are matched to the payment by the asset, `payTo` and amount the buyer echoes back. Buyers on the SBC agent platform currently read only the first offer and pay only SBC, so list an EVM SBC offer first if you want them to pay. Sui offers are described in [Sui payments](#sui-payments).
+
+#### Settlement outcomes
+
+On every network, once the facilitator may have broadcast the payment the middleware never answers 402, since a 402 tells the buyer to sign and pay again. `settlement_pending` (broadcast, outcome not yet known) returns `202 { pending: true, payment: { txHash } }`; a settle call that fails (timeout, dropped connection) returns `504 { error: "settlement_unknown", outcome: "unknown" }`; settle is sent once and never retried. The handler does not run in either case. A definite failure, such as a transaction that was mined and reverted, is still a 402 and carries the `transaction` that proves it.
 
 ### Signer adapters — `/evm`
 
